@@ -220,12 +220,24 @@ export default function Wardrobe() {
   useEffect(() => { fetchClothes() }, [])
 
   const [uploadStatus, setUploadStatus] = useState('')
-  const [detected, setDetected] = useState(null)
+  const [detected, setDetected] = useState(null)       // currently shown confirmation sheet
+  const [detectedQueue, setDetectedQueue] = useState([]) // remaining multi-item photos waiting
+
+  const _advanceQueue = (queue) => {
+    if (queue.length > 0) {
+      setDetectedQueue(queue.slice(1))
+      setDetected({ ...queue[0], queueTotal: queue.length + 1 })
+    } else {
+      setDetectedQueue([])
+      setDetected(null)
+    }
+  }
 
   const handleUpload = async (files) => {
     const list = files instanceof FileList ? Array.from(files) : [files]
     if (!list.length) return
     setUploading(true)
+    const multiQueue = []
     for (let i = 0; i < list.length; i++) {
       setUploadStatus(list.length > 1 ? `analyzing ${i + 1} of ${list.length}…` : 'reading your photo…')
       try {
@@ -234,20 +246,24 @@ export default function Wardrobe() {
         const res = await axios.post(`${API}/api/clothes/detect`, fd)
         const { filename, image_url, items } = res.data
         if (items.length === 1) {
+          // single item — save immediately, keep looping
           const save = await axios.post(`${API}/api/clothes/save-detected`, { filename, items })
           setClothes(p => [...save.data, ...p])
         } else {
-          setDetected({ filename, image_url, items, selected: items.map((_, idx) => idx) })
-          setUploading(false)
-          setUploadStatus('')
-          return
+          // queue for confirmation — don't stop processing remaining files
+          multiQueue.push({ filename, image_url, items, selected: items.map((_, idx) => idx) })
         }
       } catch {
-        // continue with remaining files
+        // skip failed photo, continue
       }
     }
     setUploading(false)
     setUploadStatus('')
+    // Show queued multi-item photos one by one
+    if (multiQueue.length > 0) {
+      setDetectedQueue(multiQueue.slice(1))
+      setDetected({ ...multiQueue[0], queueTotal: multiQueue.length })
+    }
   }
 
   const handleConfirmDetected = async () => {
@@ -260,7 +276,7 @@ export default function Wardrobe() {
       })
       setClothes(p => [...res.data, ...p])
     } finally {
-      setDetected(null)
+      _advanceQueue(detectedQueue)
     }
   }
 
@@ -413,7 +429,7 @@ export default function Wardrobe() {
 
       {/* Multi-item detection sheet */}
       {detected && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" style={{ backgroundColor: 'rgba(28,25,23,0.5)' }} onClick={() => setDetected(null)}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" style={{ backgroundColor: 'rgba(28,25,23,0.5)' }} onClick={() => _advanceQueue(detectedQueue)}>
           <div
             className="w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl max-h-[85vh] overflow-y-auto"
             style={{ backgroundColor: '#FAF7F2' }}
@@ -422,9 +438,16 @@ export default function Wardrobe() {
             <div className="h-44 overflow-hidden rounded-t-3xl sm:rounded-t-2xl relative" style={{ backgroundColor: '#E3D9CE' }}>
               <img src={`${API}${detected.image_url}`} alt="" className="w-full h-full object-cover object-top" />
               <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(28,25,23,0.4), transparent)' }} />
-              <p className="absolute bottom-3 left-5 text-white text-sm font-medium">
-                we spotted {detected.items.length} pieces —
-              </p>
+              <div className="absolute bottom-3 left-5 right-5 flex items-end justify-between">
+                <p className="text-white text-sm font-medium">
+                  we spotted {detected.items.length} pieces —
+                </p>
+                {detected.queueTotal > 1 && (
+                  <p className="text-white/70 text-xs">
+                    photo {detected.queueTotal - detectedQueue.length} of {detected.queueTotal}
+                  </p>
+                )}
+              </div>
             </div>
 
             <div className="p-5 space-y-4">
@@ -479,13 +502,14 @@ export default function Wardrobe() {
                   style={{ backgroundColor: '#1C1917', color: '#FAF7F2' }}
                 >
                   add {detected.selected.length} {detected.selected.length === 1 ? 'piece' : 'pieces'}
+                  {detectedQueue.length > 0 && ' →'}
                 </button>
                 <button
-                  onClick={() => setDetected(null)}
+                  onClick={() => _advanceQueue(detectedQueue)}
                   className="flex-1 rounded-full py-2.5 text-sm border transition-all"
                   style={{ borderColor: '#E3D9CE', color: '#9B8E84' }}
                 >
-                  cancel
+                  {detectedQueue.length > 0 ? 'skip →' : 'cancel'}
                 </button>
               </div>
             </div>
