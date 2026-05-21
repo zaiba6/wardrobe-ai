@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Playfair+Display:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Playfair+Display:ital,wght@0,400;0,500;1,400;1,500&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,10 +6,12 @@
 
 body {
   font-family: 'DM Sans', sans-serif;
-  background-color: #FAF9F6;
-  color: #2C2C2C;
+  background-color: #FAF7F2;
+  color: #1C1917;
+  -webkit-font-smoothing: antialiased;
 }
 
-h1, h2, h3 {
-  font-family: 'Playfair Display', serif;
-}
+.serif { font-family: 'Playfair Display', serif; }
+.serif-italic { font-family: 'Playfair Display', serif; font-style: italic; }
+
+input, textarea, select { font-family: 'DM Sans', sans-serif; }

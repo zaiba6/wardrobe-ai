@@ -4,11 +4,11 @@ import axios from 'axios'
 const API = import.meta.env.VITE_API_URL ?? ''
 
 const MOODS = [
-  { key: 'comfy', label: 'Comfy', emoji: '🫂', subtext: 'Loose & cozy' },
-  { key: 'casual', label: 'Casual', emoji: '👟', subtext: 'Everyday ease' },
-  { key: 'confident', label: 'Confident', emoji: '💃', subtext: 'Show it off' },
-  { key: 'flowy', label: 'Flowy', emoji: '🌸', subtext: 'Dreamy & soft' },
-  { key: 'put-together', label: 'Put-together', emoji: '✨', subtext: 'Polished look' },
+  { key: 'Comfy',        label: 'comfy',         sub: 'loose & cozy',      emoji: '🫂' },
+  { key: 'Casual',       label: 'casual',        sub: 'everyday ease',     emoji: '👟' },
+  { key: 'Confident',    label: 'confident',     sub: 'show it off',       emoji: '💃' },
+  { key: 'Flowy',        label: 'flowy',         sub: 'dreamy & soft',     emoji: '🌸' },
+  { key: 'Put-together', label: 'put-together',  sub: 'polished look',     emoji: '✨' },
 ]
 
 function weatherEmoji(condition) {
@@ -16,46 +16,11 @@ function weatherEmoji(condition) {
   const c = condition.toLowerCase()
   if (c.includes('snow')) return '❄️'
   if (c.includes('rain') || c.includes('drizzle')) return '🌧️'
-  if (c.includes('thunder') || c.includes('storm')) return '⛈️'
+  if (c.includes('thunder')) return '⛈️'
   if (c.includes('cloud')) return '☁️'
   if (c.includes('clear') || c.includes('sun')) return '☀️'
-  if (c.includes('fog') || c.includes('mist') || c.includes('haze')) return '🌫️'
-  if (c.includes('wind')) return '💨'
+  if (c.includes('fog') || c.includes('mist')) return '🌫️'
   return '🌤️'
-}
-
-function Spinner() {
-  return <div className="w-5 h-5 rounded-full border-2 border-rose-200 border-t-rose-500 animate-spin" />
-}
-
-function OutfitCard({ outfit }) {
-  const items = outfit.items || []
-  if (items.length === 0) return null
-
-  return (
-    <div className="bg-white rounded-2xl shadow-sm p-5 space-y-4">
-      {outfit.reason && (
-        <p className="text-sm italic text-stone-500">{outfit.reason}</p>
-      )}
-      <div className="flex gap-3 flex-wrap">
-        {items.map((item, i) => (
-          <div key={item.id ?? i} className="flex flex-col items-center gap-1.5 w-20">
-            <div className="w-20 h-20 rounded-xl overflow-hidden bg-stone-100 shadow-sm">
-              <img
-                src={`${API}${item.image_url}`}
-                alt={item.type}
-                className="w-full h-full object-cover"
-              />
-            </div>
-            <p className="text-xs text-stone-600 text-center capitalize leading-tight">{item.type}</p>
-            {item.color && (
-              <p className="text-xs text-stone-400 text-center capitalize leading-tight">{item.color}</p>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  )
 }
 
 export default function GetDressed() {
@@ -74,54 +39,59 @@ export default function GetDressed() {
       const res = await axios.post(`${API}/api/outfit/suggest`, { mood, city: city.trim() })
       setResult(res.data)
     } catch (err) {
-      setError(err.response?.data?.detail || 'Something went wrong. Please try again.')
+      setError(err.response?.data?.detail || 'something went wrong — try again')
     } finally {
       setLoading(false)
     }
   }
 
-  const hasOutfits = result?.outfits && result.outfits.some((o) => o.items?.length > 0)
+  const hasOutfits = result?.outfits?.some(o => o.items?.length > 0)
 
   return (
-    <div className="space-y-8 max-w-2xl mx-auto">
+    <div className="space-y-10 max-w-2xl">
       {/* Header */}
       <div>
-        <h2 className="text-2xl text-stone-800 mb-1">What are you wearing today?</h2>
-        <p className="text-sm text-stone-400">Tell us your vibe and where you are — we'll pick your outfit.</p>
+        <h2 className="serif-italic text-3xl leading-snug" style={{ color: '#1C1917' }}>
+          so, what are we wearing?
+        </h2>
+        <p className="text-sm mt-1" style={{ color: '#9B8E84' }}>
+          tell me your vibe and where you are
+        </p>
       </div>
 
-      {/* Mood section */}
+      {/* Mood */}
       <div className="space-y-3">
-        <label className="block text-sm font-medium text-stone-600">How are you feeling?</label>
-        <div className="flex flex-wrap gap-3">
-          {MOODS.map((m) => (
+        <p className="text-xs uppercase tracking-widest" style={{ color: '#9B8E84' }}>how are you feeling today</p>
+        <div className="flex gap-3 flex-wrap">
+          {MOODS.map(m => (
             <button
               key={m.key}
               onClick={() => setMood(m.key)}
-              className={`flex flex-col items-center gap-1 rounded-2xl border px-4 py-3 w-28 cursor-pointer transition-all duration-200 ${
-                mood === m.key
-                  ? 'bg-rose-100 border-rose-400 text-rose-700 shadow-sm'
-                  : 'bg-white border-stone-200 text-stone-600 hover:border-rose-200 hover:bg-rose-50/50'
-              }`}
+              className="flex flex-col items-center gap-1.5 rounded-2xl border px-4 py-3.5 w-[5.5rem] transition-all duration-200 text-center"
+              style={mood === m.key
+                ? { backgroundColor: '#EED9D5', borderColor: '#B5756A', color: '#8B4A42' }
+                : { backgroundColor: '#fff', borderColor: '#E3D9CE', color: '#9B8E84' }
+              }
             >
-              <span className="text-2xl">{m.emoji}</span>
-              <span className="text-sm font-medium leading-tight">{m.label}</span>
-              <span className="text-xs text-stone-400 leading-tight text-center">{m.subtext}</span>
+              <span className="text-xl">{m.emoji}</span>
+              <span className="text-xs font-medium leading-tight">{m.label}</span>
+              <span className="text-[10px] leading-tight" style={{ color: mood === m.key ? '#B5756A' : '#C4B5AC' }}>{m.sub}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* City input */}
+      {/* City */}
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-stone-600">Your city</label>
+        <p className="text-xs uppercase tracking-widest" style={{ color: '#9B8E84' }}>your city</p>
         <input
           type="text"
           value={city}
-          onChange={(e) => setCity(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-          placeholder="e.g. Boston, MA"
-          className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300 bg-white"
+          onChange={e => setCity(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+          placeholder="e.g. Boston, New York, London…"
+          className="w-full border-b-2 bg-transparent pb-2 text-sm focus:outline-none transition-all"
+          style={{ borderColor: city ? '#B5756A' : '#E3D9CE', color: '#1C1917' }}
         />
       </div>
 
@@ -129,67 +99,67 @@ export default function GetDressed() {
       <button
         onClick={handleSubmit}
         disabled={!mood || !city.trim() || loading}
-        className="flex items-center justify-center gap-2 bg-rose-400 hover:bg-rose-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-full px-8 py-3 font-medium text-sm transition-all duration-200 shadow-sm"
+        className="flex items-center gap-2 rounded-full px-7 py-3 text-sm font-medium transition-all disabled:opacity-40"
+        style={{ backgroundColor: '#1C1917', color: '#FAF7F2' }}
       >
-        {loading && <Spinner />}
-        {loading ? 'Finding your outfit...' : 'Get my outfit'}
+        {loading && <div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />}
+        {loading ? 'finding your look…' : 'dress me →'}
       </button>
 
       {/* Error */}
       {error && (
-        <div className="bg-rose-100 text-rose-600 rounded-xl px-4 py-3 text-sm">
+        <p className="text-sm rounded-xl px-4 py-3 border" style={{ color: '#8B4A42', backgroundColor: '#EED9D5', borderColor: '#E3C5BF' }}>
           {error}
-        </div>
-      )}
-
-      {/* Loading state */}
-      {loading && (
-        <div className="flex flex-col items-center py-12 gap-4">
-          <div className="w-10 h-10 rounded-full border-2 border-rose-200 border-t-rose-500 animate-spin" />
-          <p className="text-stone-400 text-sm">Finding your perfect outfit...</p>
-        </div>
+        </p>
       )}
 
       {/* Results */}
       {!loading && result && (
         <div className="space-y-6">
-          {/* Weather bar */}
+          {/* Weather strip */}
           {result.weather && (
-            <div className="bg-stone-50 border border-stone-100 rounded-2xl px-5 py-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <div className="flex items-center gap-4 rounded-2xl px-5 py-4 border" style={{ backgroundColor: '#fff', borderColor: '#E3D9CE' }}>
               <span className="text-2xl">{weatherEmoji(result.weather.condition)}</span>
-              <div>
-                <p className="text-sm font-medium text-stone-700">{result.weather.city}</p>
-                <p className="text-xs text-stone-400 capitalize">{result.weather.description || result.weather.condition}</p>
+              <div className="flex-1">
+                <p className="text-sm font-medium" style={{ color: '#1C1917' }}>{result.weather.city}</p>
+                <p className="text-xs capitalize" style={{ color: '#9B8E84' }}>{result.weather.description}</p>
               </div>
-              <div className="ml-auto text-right">
-                <p className="text-lg font-medium text-stone-700">
-                  {result.weather.temp_fahrenheit !== undefined ? `${Math.round(result.weather.temp_fahrenheit)}°F` : ''}
+              <div className="text-right">
+                <p className="text-lg font-medium" style={{ color: '#1C1917' }}>
+                  {Math.round(result.weather.temp_fahrenheit)}°F
                 </p>
-                <p className="text-xs text-stone-400">
-                  {result.weather.temp_celsius !== undefined ? `${Math.round(result.weather.temp_celsius)}°C` : ''}
-                </p>
+                <p className="text-xs" style={{ color: '#9B8E84' }}>{Math.round(result.weather.temp_celsius)}°C</p>
               </div>
-              {result.weather.humidity !== undefined && (
-                <p className="text-xs text-stone-400 w-full">Humidity: {result.weather.humidity}%</p>
-              )}
             </div>
           )}
 
           {/* Outfits */}
           {hasOutfits ? (
             <div className="space-y-4">
-              <h3 className="text-lg text-stone-800">Here are your outfits for today:</h3>
-              {result.outfits
-                .filter((o) => o.items?.length > 0)
-                .map((outfit, i) => (
-                  <OutfitCard key={i} outfit={outfit} />
-                ))}
+              <p className="serif text-lg" style={{ color: '#1C1917' }}>here's what i'd wear —</p>
+              {result.outfits.filter(o => o.items?.length > 0).map((outfit, i) => (
+                <div key={i} className="rounded-2xl border p-5 space-y-4" style={{ backgroundColor: '#fff', borderColor: '#E3D9CE' }}>
+                  {outfit.reason && (
+                    <p className="text-xs italic" style={{ color: '#9B8E84' }}>{outfit.reason}</p>
+                  )}
+                  <div className="flex gap-3 flex-wrap">
+                    {outfit.items.map((item, j) => (
+                      <div key={item.id ?? j} className="flex flex-col items-center gap-1.5 w-20">
+                        <div className="w-20 h-20 rounded-xl overflow-hidden" style={{ backgroundColor: '#F0EAE2' }}>
+                          <img src={`${API}${item.image_url}`} alt={item.type} className="w-full h-full object-cover" />
+                        </div>
+                        <p className="text-xs text-center capitalize leading-tight" style={{ color: '#6B5E57' }}>{item.type}</p>
+                        {item.color && <p className="text-[10px] text-center capitalize leading-tight" style={{ color: '#9B8E84' }}>{item.color}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
-            <div className="text-center py-8 space-y-2">
-              <div className="text-3xl">👗</div>
-              <p className="text-stone-500 font-medium">Not enough items yet</p>
-              <p className="text-sm text-stone-400">Add more clothes to your wardrobe to get outfit suggestions!</p>
+            <div className="text-center py-12 space-y-2">
+              <p className="serif-italic text-xl" style={{ color: '#C4B5AC' }}>not enough pieces yet</p>
+              <p className="text-sm" style={{ color: '#C4B5AC' }}>add more to your closet to get outfit suggestions</p>
             </div>
           )}
         </div>
