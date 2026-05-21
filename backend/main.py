@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from ai import analyze_inspo_image, detect_all_items, tag_clothing_image
+from ai import analyze_inspo_image, detect_all_items, suggest_vibe_outfit, tag_clothing_image
 from database import Base, engine, get_db
 from models import ClothingItem, InspoItem
 from weather import get_weather
@@ -77,6 +77,7 @@ def save_upload(file: UploadFile) -> str:
 def serialize_clothing(item: ClothingItem) -> dict:
     return {
         "id": item.id,
+        "filename": item.filename,
         "image_url": f"/uploads/{item.filename}",
         "type": item.type,
         "subtype": item.subtype,
@@ -131,6 +132,12 @@ class SaveDetectedBody(BaseModel):
 class OutfitSuggestBody(BaseModel):
     mood: str
     city: str
+
+
+class VibeOutfitBody(BaseModel):
+    vibe: str
+    city: str
+    mood: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -415,9 +422,15 @@ def delete_clothing(item_id: int, db: Session = Depends(get_db)):
     if not item:
         raise HTTPException(status_code=404, detail="Item not found.")
 
-    _delete_upload_file(item.filename)
+    filename = item.filename
     db.delete(item)
     db.commit()
+
+    # Only delete the file when no other items reference this photo
+    remaining = db.query(ClothingItem).filter(ClothingItem.filename == filename).count()
+    if remaining == 0:
+        _delete_upload_file(filename)
+
     return {"success": True}
 
 
@@ -529,6 +542,54 @@ def suggest_outfit(body: OutfitSuggestBody, db: Session = Depends(get_db)):
         ]
 
     return {"weather": weather, "mood": mood, "outfits": outfits}
+
+
+@app.post("/api/outfit/vibe")
+def suggest_vibe_outfit_endpoint(body: VibeOutfitBody, db: Session = Depends(get_db)):
+    weather = get_weather(body.city)
+    all_clothes = db.query(ClothingItem).all()
+
+    if not all_clothes:
+        return {
+            "weather": weather,
+            "outfit": {
+                "items": [],
+                "reason": "Your wardrobe is empty! Upload some clothing items first.",
+            },
+        }
+
+    wardrobe_summary = [
+        {
+            "id": item.id,
+            "type": item.type,
+            "subtype": item.subtype,
+            "color": item.color,
+            "description": item.description,
+            "formality": item.formality,
+            "fit": item.fit,
+            "season": item.season,
+        }
+        for item in all_clothes
+    ]
+
+    reason = "Here's a styled look for you!"
+    selected = []
+    try:
+        item_ids, reason = suggest_vibe_outfit(wardrobe_summary, body.vibe, weather, body.mood)
+        id_order = {iid: idx for idx, iid in enumerate(item_ids)}
+        id_set = set(item_ids)
+        selected = [c for c in all_clothes if c.id in id_set]
+        selected.sort(key=lambda c: id_order.get(c.id, 999))
+    except Exception:
+        pass
+
+    return {
+        "weather": weather,
+        "outfit": {
+            "items": [serialize_clothing(i) for i in selected],
+            "reason": reason,
+        },
+    }
 
 
 # ---- Inspo ----

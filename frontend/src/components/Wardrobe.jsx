@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import axios from 'axios'
 
 const API = import.meta.env.VITE_API_URL ?? ''
@@ -138,58 +138,49 @@ function EditModal({ item, onSave, onClose }) {
   )
 }
 
-function ClothingCard({ item, onEdit, onDelete }) {
-  const [hovered, setHovered] = useState(false)
-
+function PhotoCard({ photo, onEditItem, onDeleteItem }) {
   return (
     <div
-      className="group relative rounded-xl overflow-hidden border transition-all duration-200"
+      className="rounded-xl overflow-hidden border"
       style={{ backgroundColor: '#fff', borderColor: '#E3D9CE' }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
     >
-      <div className="aspect-square overflow-hidden relative" style={{ backgroundColor: '#F0EAE2' }}>
-        <img src={`${API}${item.image_url}`} alt={item.type} className="w-full h-full object-cover" />
-        {hovered && (
-          <div className="absolute top-2 right-2 flex gap-1">
+      <div className="aspect-square overflow-hidden" style={{ backgroundColor: '#F0EAE2' }}>
+        <img src={`${API}${photo.image_url}`} alt="" className="w-full h-full object-cover" />
+      </div>
+      <div className="p-2.5 space-y-1.5">
+        {photo.items.map(item => (
+          <div key={item.id} className="flex items-center gap-1 group/row">
+            <span
+              className="text-xs px-2 py-0.5 rounded-full flex-1 min-w-0 truncate capitalize"
+              style={{ backgroundColor: '#EED9D5', color: '#8B4A42' }}
+            >
+              {item.subtype || item.type}
+            </span>
+            <span className="text-[10px] shrink-0 capitalize hidden sm:block" style={{ color: '#C4B5AC' }}>
+              {item.color?.split(' ')[0]}
+            </span>
             <button
-              onClick={() => onEdit(item)}
-              className="w-7 h-7 rounded-full flex items-center justify-center transition-all"
-              style={{ backgroundColor: 'rgba(250,247,242,0.92)', color: '#9B8E84' }}
+              onClick={() => onEditItem(item)}
+              className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity"
+              style={{ color: '#9B8E84' }}
               title="Edit"
             >
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 11l6.5-6.5a2 2 0 012.828 2.828L11.828 13.828A4 4 0 019 15H7v-2a4 4 0 012-3.468z" />
               </svg>
             </button>
             <button
-              onClick={() => onDelete(item.id)}
-              className="w-7 h-7 rounded-full flex items-center justify-center transition-all"
-              style={{ backgroundColor: 'rgba(250,247,242,0.92)', color: '#9B8E84' }}
-              title="Delete"
+              onClick={() => onDeleteItem(item.id)}
+              className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity"
+              style={{ color: '#9B8E84' }}
+              title="Remove"
             >
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
-        )}
-      </div>
-      <div className="p-2.5 space-y-1">
-        <div className="flex flex-wrap gap-1">
-          {(item.subtype || item.type) && (
-            <span className="text-xs px-2 py-0.5 rounded-full capitalize" style={{ backgroundColor: '#EED9D5', color: '#8B4A42' }}>
-              {item.subtype || item.type}
-            </span>
-          )}
-          {item.fit && (
-            <span className="text-xs px-2 py-0.5 rounded-full capitalize border" style={{ borderColor: '#E3D9CE', color: '#9B8E84' }}>
-              {item.fit}
-            </span>
-          )}
-        </div>
-        {item.color && <p className="text-xs capitalize" style={{ color: '#9B8E84' }}>{item.color}</p>}
-        {item.description && <p className="text-xs truncate" style={{ color: '#6B5E57' }}>{item.description}</p>}
+        ))}
       </div>
     </div>
   )
@@ -203,6 +194,17 @@ export default function Wardrobe() {
   const [editingItem, setEditingItem] = useState(null)
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef(null)
+
+  // Group items by photo — one card per image, multiple pills per card
+  const photos = useMemo(() => {
+    const map = {}
+    clothes.forEach(item => {
+      const key = item.image_url
+      if (!map[key]) map[key] = { image_url: item.image_url, items: [] }
+      map[key].items.push(item)
+    })
+    return Object.values(map)
+  }, [clothes])
 
   const fetchClothes = async (f = filters) => {
     setLoading(true)
@@ -218,7 +220,7 @@ export default function Wardrobe() {
   useEffect(() => { fetchClothes() }, [])
 
   const [uploadStatus, setUploadStatus] = useState('')
-  const [detected, setDetected] = useState(null) // { filename, image_url, items, selected }
+  const [detected, setDetected] = useState(null)
 
   const handleUpload = async (files) => {
     const list = files instanceof FileList ? Array.from(files) : [files]
@@ -232,11 +234,9 @@ export default function Wardrobe() {
         const res = await axios.post(`${API}/api/clothes/detect`, fd)
         const { filename, image_url, items } = res.data
         if (items.length === 1) {
-          // single item — save directly
           const save = await axios.post(`${API}/api/clothes/save-detected`, { filename, items })
           setClothes(p => [...save.data, ...p])
         } else {
-          // multiple items — show confirmation sheet
           setDetected({ filename, image_url, items, selected: items.map((_, idx) => idx) })
           setUploading(false)
           setUploadStatus('')
@@ -282,7 +282,7 @@ export default function Wardrobe() {
         <div>
           <h2 className="serif text-2xl" style={{ color: '#1C1917' }}>the closet</h2>
           <p className="text-sm mt-0.5" style={{ color: '#9B8E84' }}>
-            {clothes.length} {clothes.length === 1 ? 'piece' : 'pieces'} archived
+            {photos.length} {photos.length === 1 ? 'photo' : 'photos'} · {clothes.length} {clothes.length === 1 ? 'piece' : 'pieces'}
           </p>
         </div>
         <button
@@ -382,21 +382,33 @@ export default function Wardrobe() {
         <div className="flex justify-center py-20">
           <div className="w-6 h-6 rounded-full border-2 border-[#E3D9CE] border-t-[#B5756A] animate-spin" />
         </div>
-      ) : clothes.length === 0 ? (
+      ) : photos.length === 0 ? (
         <div className="text-center py-24 space-y-2">
           <p className="serif-italic text-2xl" style={{ color: '#C4B5AC' }}>nothing here yet</p>
           <p className="text-sm" style={{ color: '#C4B5AC' }}>upload your first piece above</p>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {clothes.map(item => (
-            <ClothingCard key={item.id} item={item} onEdit={setEditingItem} onDelete={handleDelete} />
+          {photos.map(photo => (
+            <PhotoCard
+              key={photo.image_url}
+              photo={photo}
+              onEditItem={setEditingItem}
+              onDeleteItem={handleDelete}
+            />
           ))}
         </div>
       )}
 
       {editingItem && (
-        <EditModal item={editingItem} onSave={updated => { setClothes(p => p.map(c => c.id === updated.id ? updated : c)); setEditingItem(null) }} onClose={() => setEditingItem(null)} />
+        <EditModal
+          item={editingItem}
+          onSave={updated => {
+            setClothes(p => p.map(c => c.id === updated.id ? updated : c))
+            setEditingItem(null)
+          }}
+          onClose={() => setEditingItem(null)}
+        />
       )}
 
       {/* Multi-item detection sheet */}
@@ -407,7 +419,6 @@ export default function Wardrobe() {
             style={{ backgroundColor: '#FAF7F2' }}
             onClick={e => e.stopPropagation()}
           >
-            {/* Photo strip */}
             <div className="h-44 overflow-hidden rounded-t-3xl sm:rounded-t-2xl relative" style={{ backgroundColor: '#E3D9CE' }}>
               <img src={`${API}${detected.image_url}`} alt="" className="w-full h-full object-cover object-top" />
               <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(28,25,23,0.4), transparent)' }} />

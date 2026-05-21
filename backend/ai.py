@@ -221,3 +221,58 @@ def analyze_inspo_image(image_path: str) -> dict:
         return {"items": [], "style_notes": "Could not analyze image"}
     except Exception as exc:
         raise RuntimeError(f"AI inspo analysis failed: {exc}") from exc
+
+
+def suggest_vibe_outfit(
+    wardrobe_items: list[dict],
+    vibe: str,
+    weather: dict,
+    mood: str | None = None,
+) -> tuple[list[int], str]:
+    """Ask Claude to pick specific wardrobe item IDs for a vibe + weather."""
+    if not wardrobe_items:
+        return [], "Your wardrobe is empty — upload some pieces first!"
+
+    client = _get_client()
+
+    wardrobe_text = "\n".join(
+        f"ID {item['id']}: {item['color']} {item.get('subtype') or item['type']} "
+        f"({item['formality']}, {item['fit']}, {item['season']}) — {item['description']}"
+        for item in wardrobe_items
+    )
+
+    temp_c = weather["temp_celsius"]
+    temp_f = weather["temp_fahrenheit"]
+    condition = weather["description"]
+    mood_line = f"Mood: {mood}.\n" if mood else ""
+
+    prompt = (
+        f'You are a personal stylist. Create an outfit for: "{vibe}".\n'
+        f"Weather: {temp_c}°C ({temp_f}°F), {condition}.\n"
+        f"{mood_line}"
+        f"\nWardrobe:\n{wardrobe_text}\n\n"
+        "Pick a complete, weather-appropriate outfit. Include a top + bottom OR a dress/jumpsuit. "
+        "Add outerwear if temp < 18°C. Add shoes and/or an accessory if available.\n"
+        "Return JSON with:\n"
+        '- "item_ids": array of integer item IDs (only IDs from the list above)\n'
+        '- "reason": one friendly sentence explaining this outfit for the vibe and weather\n'
+        "Return ONLY valid JSON. No markdown."
+    )
+
+    message = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=256,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    raw = message.content[0].text.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
+
+    result = json.loads(raw)
+    item_ids = [int(i) for i in result.get("item_ids", [])]
+    reason = result.get("reason", "Here's a great outfit for you!")
+    return item_ids, reason
