@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "i have nothing to wear.ai",
+  "name": "IHaveNothingToWear.ai",
   "version": "1.0.0",
   "description": "Save inspo images directly to your wardrobe from anywhere on the web.",
   "permissions": ["contextMenus", "storage"],
