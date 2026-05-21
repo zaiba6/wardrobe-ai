@@ -14,6 +14,7 @@ class ClothingItem(Base):
     fit = Column(String, nullable=False)        # loose/oversized/regular/fitted/bodycon
     formality = Column(String, nullable=False)  # casual/smart-casual/formal
     season = Column(String, nullable=False)     # all-season/spring-summer/fall-winter
+    subtype = Column(String, nullable=True)         # e.g. "crop top", "midi skirt", "ankle boots"
     description = Column(Text, nullable=False)
     user_notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

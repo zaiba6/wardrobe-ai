@@ -8,6 +8,17 @@ const FIT_OPTIONS = ['loose', 'oversized', 'regular', 'fitted', 'bodycon']
 const FORMALITY_OPTIONS = ['casual', 'smart-casual', 'formal']
 const SEASON_OPTIONS = ['all-season', 'spring-summer', 'fall-winter']
 
+const SUBTYPES = {
+  top:       ['tank top', 'crop top', 't-shirt', 'blouse', 'going out top', 'button-down', 'sweater', 'hoodie', 'bodysuit', 'corset top'],
+  bottom:    ['jeans', 'trousers', 'shorts', 'leggings', 'sweatpants', 'cargo pants'],
+  skirt:     ['mini skirt', 'midi skirt', 'maxi skirt', 'pleated skirt', 'denim skirt', 'slip skirt'],
+  dress:     ['mini dress', 'midi dress', 'maxi dress', 'bodycon dress', 'slip dress', 'sundress', 'going out dress', 'wrap dress'],
+  outerwear: ['leather jacket', 'denim jacket', 'blazer', 'coat', 'trench coat', 'puffer jacket', 'cardigan', 'bomber jacket'],
+  shoes:     ['sneakers', 'ankle boots', 'boots', 'knee-high boots', 'heels', 'sandals', 'loafers', 'flats', 'platform shoes', 'mules'],
+  accessory: ['bag', 'belt', 'hat', 'sunglasses', 'jewelry', 'scarf', 'watch'],
+  jumpsuit:  ['jumpsuit', 'romper', 'playsuit'],
+}
+
 function Spinner() {
   return <div className="w-4 h-4 rounded-full border-2 border-[#E3D9CE] border-t-[#B5756A] animate-spin" />
 }
@@ -15,6 +26,7 @@ function Spinner() {
 function EditModal({ item, onSave, onClose }) {
   const [form, setForm] = useState({
     type: item.type || '',
+    subtype: item.subtype || '',
     color: item.color || '',
     fit: item.fit || '',
     formality: item.formality || '',
@@ -73,6 +85,18 @@ function EditModal({ item, onSave, onClose }) {
           <h3 className="serif text-lg" style={{ color: '#1C1917' }}>Edit piece</h3>
           <div className="grid grid-cols-2 gap-3">
             {field('Type', 'type', 'text', TYPE_OPTIONS)}
+            <div>
+              <label className="block text-xs uppercase tracking-widest mb-1.5" style={{ color: '#9B8E84' }}>Subtype</label>
+              <select
+                value={form.subtype}
+                onChange={e => { setForm(p => ({ ...p, subtype: e.target.value })) }}
+                className="w-full border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[#B5756A]"
+                style={{ borderColor: '#E3D9CE', color: '#1C1917' }}
+              >
+                <option value="">—</option>
+                {(SUBTYPES[form.type] || []).map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
             {field('Color', 'color')}
             {field('Fit', 'fit', 'text', FIT_OPTIONS)}
             {field('Formality', 'formality', 'text', FORMALITY_OPTIONS)}
@@ -153,9 +177,9 @@ function ClothingCard({ item, onEdit, onDelete }) {
       </div>
       <div className="p-2.5 space-y-1">
         <div className="flex flex-wrap gap-1">
-          {item.type && (
+          {(item.subtype || item.type) && (
             <span className="text-xs px-2 py-0.5 rounded-full capitalize" style={{ backgroundColor: '#EED9D5', color: '#8B4A42' }}>
-              {item.type}
+              {item.subtype || item.type}
             </span>
           )}
           {item.fit && (
@@ -175,7 +199,7 @@ export default function Wardrobe() {
   const [clothes, setClothes] = useState([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
-  const [filters, setFilters] = useState({ type: '', fit: '', formality: '', season: '' })
+  const [filters, setFilters] = useState({ type: '', subtype: '', fit: '', formality: '', season: '' })
   const [editingItem, setEditingItem] = useState(null)
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef(null)
@@ -300,8 +324,32 @@ export default function Wardrobe() {
 
       {/* Filters */}
       <div className="flex gap-2 flex-wrap">
+        <select
+          value={filters.type}
+          onChange={e => {
+            const f = { ...filters, type: e.target.value, subtype: '' }
+            setFilters(f); fetchClothes(f)
+          }}
+          className="text-xs border rounded-full px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#B5756A] cursor-pointer"
+          style={{ borderColor: '#E3D9CE', backgroundColor: '#fff', color: '#6B5E57' }}
+        >
+          <option value="">all types</option>
+          {TYPE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+
+        {filters.type && SUBTYPES[filters.type] && (
+          <select
+            value={filters.subtype}
+            onChange={e => handleFilterChange('subtype', e.target.value)}
+            className="text-xs border rounded-full px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#B5756A] cursor-pointer"
+            style={{ borderColor: '#B5756A', backgroundColor: '#EED9D5', color: '#8B4A42' }}
+          >
+            <option value="">all {filters.type}s</option>
+            {SUBTYPES[filters.type].map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+        )}
+
         {[
-          { field: 'type', options: TYPE_OPTIONS, label: 'type' },
           { field: 'fit', options: FIT_OPTIONS, label: 'fit' },
           { field: 'formality', options: FORMALITY_OPTIONS, label: 'formality' },
           { field: 'season', options: SEASON_OPTIONS, label: 'season' },
@@ -317,9 +365,10 @@ export default function Wardrobe() {
             {options.map(o => <option key={o} value={o}>{o}</option>)}
           </select>
         ))}
+
         {Object.values(filters).some(Boolean) && (
           <button
-            onClick={() => { const f = { type: '', fit: '', formality: '', season: '' }; setFilters(f); fetchClothes(f) }}
+            onClick={() => { const f = { type: '', subtype: '', fit: '', formality: '', season: '' }; setFilters(f); fetchClothes(f) }}
             className="text-xs rounded-full px-3 py-1.5 transition-all"
             style={{ color: '#B5756A' }}
           >

@@ -11,6 +11,7 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ai import analyze_inspo_image, detect_all_items, tag_clothing_image
@@ -22,7 +23,26 @@ load_dotenv()
 
 Base.metadata.create_all(bind=engine)
 
+# Add subtype column to existing databases that predate this field
+with engine.connect() as _conn:
+    try:
+        _conn.execute(text("ALTER TABLE clothing_items ADD COLUMN subtype VARCHAR"))
+        _conn.commit()
+    except Exception:
+        pass  # column already exists
+
 app = FastAPI(title="Wardrobe AI API")
+
+SUBTYPES: dict[str, list[str]] = {
+    "top": ["tank top", "crop top", "t-shirt", "blouse", "going out top", "button-down", "sweater", "hoodie", "bodysuit", "corset top"],
+    "bottom": ["jeans", "trousers", "shorts", "leggings", "sweatpants", "cargo pants"],
+    "skirt": ["mini skirt", "midi skirt", "maxi skirt", "pleated skirt", "denim skirt", "slip skirt"],
+    "dress": ["mini dress", "midi dress", "maxi dress", "bodycon dress", "slip dress", "sundress", "going out dress", "wrap dress"],
+    "outerwear": ["leather jacket", "denim jacket", "blazer", "coat", "trench coat", "puffer jacket", "cardigan", "bomber jacket"],
+    "shoes": ["sneakers", "ankle boots", "boots", "knee-high boots", "heels", "sandals", "loafers", "flats", "platform shoes", "mules"],
+    "accessory": ["bag", "belt", "hat", "sunglasses", "jewelry", "scarf", "watch"],
+    "jumpsuit": ["jumpsuit", "romper", "playsuit"],
+}
 
 app.add_middleware(
     CORSMiddleware,
@@ -59,6 +79,7 @@ def serialize_clothing(item: ClothingItem) -> dict:
         "id": item.id,
         "image_url": f"/uploads/{item.filename}",
         "type": item.type,
+        "subtype": item.subtype,
         "color": item.color,
         "fit": item.fit,
         "formality": item.formality,
@@ -93,6 +114,7 @@ def _delete_upload_file(filename: str) -> None:
 
 class ClothingUpdateBody(BaseModel):
     type: Optional[str] = None
+    subtype: Optional[str] = None
     color: Optional[str] = None
     fit: Optional[str] = None
     formality: Optional[str] = None
@@ -279,6 +301,7 @@ def upload_clothing(
     item = ClothingItem(
         filename=filename,
         type=tags.get("type", "top"),
+        subtype=tags.get("subtype"),
         color=tags.get("color", "unknown"),
         fit=tags.get("fit", "regular"),
         formality=tags.get("formality", "casual"),
@@ -321,6 +344,7 @@ def save_detected(body: SaveDetectedBody, db: Session = Depends(get_db)):
         item = ClothingItem(
             filename=body.filename,
             type=tags.get("type", "top"),
+            subtype=tags.get("subtype"),
             color=tags.get("color", "unknown"),
             fit=tags.get("fit", "regular"),
             formality=tags.get("formality", "casual"),
@@ -336,9 +360,15 @@ def save_detected(body: SaveDetectedBody, db: Session = Depends(get_db)):
     return [serialize_clothing(i) for i in saved]
 
 
+@app.get("/api/subtypes")
+def get_subtypes():
+    return SUBTYPES
+
+
 @app.get("/api/clothes")
 def list_clothes(
     type: Optional[str] = None,
+    subtype: Optional[str] = None,
     fit: Optional[str] = None,
     formality: Optional[str] = None,
     season: Optional[str] = None,
@@ -347,6 +377,8 @@ def list_clothes(
     query = db.query(ClothingItem)
     if type:
         query = query.filter(ClothingItem.type == type)
+    if subtype:
+        query = query.filter(ClothingItem.subtype == subtype)
     if fit:
         query = query.filter(ClothingItem.fit == fit)
     if formality:

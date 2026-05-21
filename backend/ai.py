@@ -68,6 +68,7 @@ def tag_clothing_image(image_path: str) -> dict:
                             "text": (
                                 "Analyze this clothing item photo and return a JSON object with these exact fields:\n"
                                 '- "type": one of [top, bottom, dress, outerwear, shoes, accessory, jumpsuit, skirt]\n'
+                                '- "subtype": specific subcategory, e.g. for top: [tank top, crop top, t-shirt, blouse, going out top, button-down, sweater, hoodie, bodysuit, corset top]; for bottom: [jeans, trousers, shorts, leggings, sweatpants, cargo pants]; for skirt: [mini skirt, midi skirt, maxi skirt, pleated skirt, denim skirt, slip skirt]; for dress: [mini dress, midi dress, maxi dress, bodycon dress, slip dress, sundress, going out dress, wrap dress]; for outerwear: [leather jacket, denim jacket, blazer, coat, trench coat, puffer jacket, cardigan, bomber jacket]; for shoes: [sneakers, ankle boots, boots, knee-high boots, heels, sandals, loafers, flats, platform shoes, mules]; for accessory: [bag, belt, hat, sunglasses, jewelry, scarf, watch]\n'
                                 '- "color": primary color(s) as a descriptive string (e.g. "navy blue", "cream and brown stripe")\n'
                                 '- "fit": one of [loose, oversized, regular, fitted, bodycon]\n'
                                 '- "formality": one of [casual, smart-casual, formal]\n'
@@ -122,6 +123,7 @@ def detect_all_items(image_path: str) -> list[dict]:
                         "Analyze this fashion photo and identify ALL visible clothing items and accessories.\n"
                         "For each item return a JSON object with:\n"
                         '- "type": one of [top, bottom, dress, outerwear, shoes, accessory, jumpsuit, skirt]\n'
+                        '- "subtype": specific subcategory (e.g. crop top, midi skirt, ankle boots, jeans, going out dress)\n'
                         '- "color": color description\n'
                         '- "fit": one of [loose, oversized, regular, fitted, bodycon]\n'
                         '- "formality": one of [casual, smart-casual, formal]\n'
