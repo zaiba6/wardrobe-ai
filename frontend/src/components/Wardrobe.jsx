@@ -193,19 +193,50 @@ export default function Wardrobe() {
 
   useEffect(() => { fetchClothes() }, [])
 
-  const handleUpload = async (file) => {
-    if (!file) return
+  const [uploadStatus, setUploadStatus] = useState('')
+  const [detected, setDetected] = useState(null) // { filename, image_url, items, selected }
+
+  const handleUpload = async (files) => {
+    const list = files instanceof FileList ? Array.from(files) : [files]
+    if (!list.length) return
     setUploading(true)
+    for (let i = 0; i < list.length; i++) {
+      setUploadStatus(list.length > 1 ? `analyzing ${i + 1} of ${list.length}…` : 'reading your photo…')
+      try {
+        const fd = new FormData()
+        fd.append('image', list[i])
+        const res = await axios.post(`${API}/api/clothes/detect`, fd)
+        const { filename, image_url, items } = res.data
+        if (items.length === 1) {
+          // single item — save directly
+          const save = await axios.post(`${API}/api/clothes/save-detected`, { filename, items })
+          setClothes(p => [...save.data, ...p])
+        } else {
+          // multiple items — show confirmation sheet
+          setDetected({ filename, image_url, items, selected: items.map((_, idx) => idx) })
+          setUploading(false)
+          setUploadStatus('')
+          return
+        }
+      } catch {
+        // continue with remaining files
+      }
+    }
+    setUploading(false)
+    setUploadStatus('')
+  }
+
+  const handleConfirmDetected = async () => {
+    if (!detected) return
+    const chosen = detected.items.filter((_, idx) => detected.selected.includes(idx))
     try {
-      const fd = new FormData()
-      fd.append('image', file)
-      fd.append('user_notes', '')
-      const res = await axios.post(`${API}/api/clothes/upload`, fd)
-      setClothes(p => [res.data, ...p])
-    } catch {
-      // silent — Claude failure shouldn't block the UI
+      const res = await axios.post(`${API}/api/clothes/save-detected`, {
+        filename: detected.filename,
+        items: chosen,
+      })
+      setClothes(p => [...res.data, ...p])
     } finally {
-      setUploading(false)
+      setDetected(null)
     }
   }
 
@@ -243,7 +274,7 @@ export default function Wardrobe() {
           )}
           {uploading ? 'analyzing…' : 'add piece'}
         </button>
-        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={e => { handleUpload(e.target.files?.[0]); e.target.value = '' }} />
+        <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={e => { handleUpload(e.target.files); e.target.value = '' }} />
       </div>
 
       {/* Upload drop zone */}
@@ -252,12 +283,12 @@ export default function Wardrobe() {
         onClick={() => !uploading && fileInputRef.current?.click()}
         onDragOver={e => { e.preventDefault(); setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
-        onDrop={e => { e.preventDefault(); setDragOver(false); handleUpload(e.dataTransfer.files?.[0]) }}
+        onDrop={e => { e.preventDefault(); setDragOver(false); handleUpload(e.dataTransfer.files) }}
       >
         {uploading ? (
           <div className="flex flex-col items-center gap-3">
             <div className="w-8 h-8 rounded-full border-2 border-[#E3D9CE] border-t-[#B5756A] animate-spin" />
-            <p className="text-sm" style={{ color: '#B5756A' }}>Claude is reading your piece…</p>
+            <p className="text-sm" style={{ color: '#B5756A' }}>{uploadStatus}</p>
           </div>
         ) : (
           <div className="space-y-1">
@@ -317,6 +348,89 @@ export default function Wardrobe() {
 
       {editingItem && (
         <EditModal item={editingItem} onSave={updated => { setClothes(p => p.map(c => c.id === updated.id ? updated : c)); setEditingItem(null) }} onClose={() => setEditingItem(null)} />
+      )}
+
+      {/* Multi-item detection sheet */}
+      {detected && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" style={{ backgroundColor: 'rgba(28,25,23,0.5)' }} onClick={() => setDetected(null)}>
+          <div
+            className="w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl max-h-[85vh] overflow-y-auto"
+            style={{ backgroundColor: '#FAF7F2' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Photo strip */}
+            <div className="h-44 overflow-hidden rounded-t-3xl sm:rounded-t-2xl relative" style={{ backgroundColor: '#E3D9CE' }}>
+              <img src={`${API}${detected.image_url}`} alt="" className="w-full h-full object-cover object-top" />
+              <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(28,25,23,0.4), transparent)' }} />
+              <p className="absolute bottom-3 left-5 text-white text-sm font-medium">
+                we spotted {detected.items.length} pieces —
+              </p>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <p className="text-sm" style={{ color: '#9B8E84' }}>select the ones you want to add to your closet</p>
+
+              <div className="space-y-2">
+                {detected.items.map((item, idx) => {
+                  const checked = detected.selected.includes(idx)
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => setDetected(d => ({
+                        ...d,
+                        selected: checked
+                          ? d.selected.filter(i => i !== idx)
+                          : [...d.selected, idx],
+                      }))}
+                      className="w-full flex items-start gap-3 rounded-xl p-3 border text-left transition-all"
+                      style={{
+                        backgroundColor: checked ? '#EED9D5' : '#fff',
+                        borderColor: checked ? '#B5756A' : '#E3D9CE',
+                      }}
+                    >
+                      <div className="mt-0.5 w-4 h-4 rounded flex items-center justify-center shrink-0 border transition-all"
+                        style={{ backgroundColor: checked ? '#B5756A' : '#fff', borderColor: checked ? '#B5756A' : '#E3D9CE' }}>
+                        {checked && (
+                          <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </div>
+                      <div className="flex-1 space-y-1">
+                        <p className="text-sm font-medium capitalize" style={{ color: '#1C1917' }}>{item.description || item.type}</p>
+                        <div className="flex flex-wrap gap-1">
+                          {[item.type, item.color, item.fit].filter(Boolean).map((tag, t) => (
+                            <span key={t} className="text-xs px-2 py-0.5 rounded-full border capitalize" style={{ borderColor: '#E3D9CE', color: '#9B8E84' }}>
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div className="flex gap-3 pt-1">
+                <button
+                  onClick={handleConfirmDetected}
+                  disabled={detected.selected.length === 0}
+                  className="flex-1 rounded-full py-2.5 text-sm font-medium transition-all disabled:opacity-40"
+                  style={{ backgroundColor: '#1C1917', color: '#FAF7F2' }}
+                >
+                  add {detected.selected.length} {detected.selected.length === 1 ? 'piece' : 'pieces'}
+                </button>
+                <button
+                  onClick={() => setDetected(null)}
+                  className="flex-1 rounded-full py-2.5 text-sm border transition-all"
+                  style={{ borderColor: '#E3D9CE', color: '#9B8E84' }}
+                >
+                  cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

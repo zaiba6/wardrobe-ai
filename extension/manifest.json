@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "i have nothing to wear.ai",
+  "version": "1.0.0",
+  "description": "Save inspo images directly to your wardrobe from anywhere on the web.",
+  "permissions": ["contextMenus", "storage"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "i have nothing to wear.ai"
+  }
+}

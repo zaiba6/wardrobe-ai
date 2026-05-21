@@ -82,18 +82,26 @@ export default function Inspo() {
 
   useEffect(() => { fetchInspo(); fetchRecs() }, [])
 
-  const handleUpload = async (file) => {
-    if (!file) return
+  const [uploadStatus, setUploadStatus] = useState('')
+
+  const handleUpload = async (files) => {
+    const list = files instanceof FileList ? Array.from(files) : [files]
+    if (!list.length) return
     setUploading(true)
-    try {
-      const fd = new FormData()
-      fd.append('image', file)
-      const res = await axios.post(`${API}/api/inspo/upload`, fd)
-      setInspoItems(p => [res.data, ...p])
-      fetchRecs()
-    } finally {
-      setUploading(false)
+    for (let i = 0; i < list.length; i++) {
+      setUploadStatus(list.length > 1 ? `analyzing ${i + 1} of ${list.length}…` : 'analyzing your inspo…')
+      try {
+        const fd = new FormData()
+        fd.append('image', list[i])
+        const res = await axios.post(`${API}/api/inspo/upload`, fd)
+        setInspoItems(p => [res.data, ...p])
+      } catch {
+        // continue with remaining
+      }
     }
+    fetchRecs()
+    setUploading(false)
+    setUploadStatus('')
   }
 
   const handleDelete = async (id) => {
@@ -118,13 +126,13 @@ export default function Inspo() {
         onClick={() => !uploading && fileInputRef.current?.click()}
         onDragOver={e => { e.preventDefault(); setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
-        onDrop={e => { e.preventDefault(); setDragOver(false); handleUpload(e.dataTransfer.files?.[0]) }}
+        onDrop={e => { e.preventDefault(); setDragOver(false); handleUpload(e.dataTransfer.files) }}
       >
-        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={e => { handleUpload(e.target.files?.[0]); e.target.value = '' }} />
+        <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={e => { handleUpload(e.target.files); e.target.value = '' }} />
         {uploading ? (
           <div className="flex flex-col items-center gap-3">
             <div className="w-7 h-7 rounded-full border-2 border-[#E3D9CE] border-t-[#B5756A] animate-spin" />
-            <p className="text-sm" style={{ color: '#B5756A' }}>analyzing your inspo…</p>
+            <p className="text-sm" style={{ color: '#B5756A' }}>{uploadStatus}</p>
           </div>
         ) : (
           <div className="space-y-1">

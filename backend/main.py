@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from ai import analyze_inspo_image, tag_clothing_image
+from ai import analyze_inspo_image, detect_all_items, tag_clothing_image
 from database import Base, engine, get_db
 from models import ClothingItem, InspoItem
 from weather import get_weather
@@ -99,6 +99,11 @@ class ClothingUpdateBody(BaseModel):
     season: Optional[str] = None
     description: Optional[str] = None
     user_notes: Optional[str] = None
+
+
+class SaveDetectedBody(BaseModel):
+    filename: str
+    items: list[dict]
 
 
 class OutfitSuggestBody(BaseModel):
@@ -286,6 +291,49 @@ def upload_clothing(
     db.refresh(item)
 
     return serialize_clothing(item)
+
+
+@app.post("/api/clothes/detect")
+def detect_clothing(
+    image: UploadFile = File(...),
+):
+    """Save image and return all detected clothing items without committing to DB."""
+    if not image.content_type or not image.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Uploaded file must be an image.")
+
+    filename = save_upload(image)
+    image_path = str(UPLOAD_DIR / filename)
+
+    try:
+        items = detect_all_items(image_path)
+    except RuntimeError as exc:
+        _delete_upload_file(filename)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    return {"filename": filename, "image_url": f"/uploads/{filename}", "items": items}
+
+
+@app.post("/api/clothes/save-detected")
+def save_detected(body: SaveDetectedBody, db: Session = Depends(get_db)):
+    """Save selected detected items to DB — all sharing the same uploaded image."""
+    saved = []
+    for tags in body.items:
+        item = ClothingItem(
+            filename=body.filename,
+            type=tags.get("type", "top"),
+            color=tags.get("color", "unknown"),
+            fit=tags.get("fit", "regular"),
+            formality=tags.get("formality", "casual"),
+            season=tags.get("season", "all-season"),
+            description=tags.get("description", ""),
+            user_notes=None,
+        )
+        db.add(item)
+        saved.append(item)
+    db.commit()
+    for item in saved:
+        db.refresh(item)
+    return [serialize_clothing(i) for i in saved]
 
 
 @app.get("/api/clothes")
@@ -479,6 +527,49 @@ def upload_inspo(
     db.commit()
     db.refresh(item)
 
+    return serialize_inspo(item)
+
+
+class SaveFromUrlBody(BaseModel):
+    image_url: str
+
+
+@app.post("/api/inspo/save-url")
+def save_inspo_from_url(body: SaveFromUrlBody, db: Session = Depends(get_db)):
+    """Download an image from a URL (e.g. from the browser extension) and save as inspo."""
+    url = body.image_url
+    if not url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="Invalid URL.")
+
+    try:
+        resp = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+        resp.raise_for_status()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not download image: {exc}")
+
+    content_type = resp.headers.get("content-type", "image/jpeg")
+    ext_map = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
+    ext = next((v for k, v in ext_map.items() if k in content_type), ".jpg")
+
+    filename = f"{uuid.uuid4()}{ext}"
+    path = UPLOAD_DIR / filename
+    with open(path, "wb") as f:
+        f.write(resp.content)
+
+    try:
+        result = analyze_inspo_image(str(path))
+    except RuntimeError as exc:
+        _delete_upload_file(filename)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    item = InspoItem(
+        filename=filename,
+        items_detected=json.dumps(result.get("items", [])),
+        style_notes=result.get("style_notes", ""),
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
     return serialize_inspo(item)
 
 

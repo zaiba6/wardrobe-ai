@@ -18,7 +18,7 @@ export default function App() {
         <div className="max-w-4xl mx-auto px-6 pt-6 pb-0">
           <div className="mb-5">
             <h1 className="serif-italic text-3xl leading-none" style={{ color: '#1C1917' }}>
-              i have nothing to wear.
+              i have nothing to wear.ai
             </h1>
             <p className="text-xs mt-1.5 tracking-widest uppercase" style={{ color: '#9B8E84' }}>
               your personal style archive

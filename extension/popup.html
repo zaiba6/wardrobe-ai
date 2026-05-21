@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>i have nothing to wear.ai</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 280px;
+      font-family: 'Georgia', serif;
+      background: #FAF7F2;
+      color: #1C1917;
+      padding: 20px;
+    }
+
+    h1 {
+      font-style: italic;
+      font-size: 15px;
+      font-weight: 400;
+      color: #1C1917;
+      margin-bottom: 4px;
+    }
+
+    p.sub {
+      font-family: system-ui, sans-serif;
+      font-size: 11px;
+      color: #9B8E84;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 18px;
+    }
+
+    label {
+      font-family: system-ui, sans-serif;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #9B8E84;
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    input {
+      width: 100%;
+      border: none;
+      border-bottom: 1.5px solid #E3D9CE;
+      background: transparent;
+      padding: 6px 0;
+      font-size: 12px;
+      color: #1C1917;
+      font-family: system-ui, sans-serif;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input:focus { border-bottom-color: #B5756A; }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    button {
+      flex: 1;
+      border: none;
+      border-radius: 99px;
+      padding: 8px;
+      font-size: 12px;
+      cursor: pointer;
+      font-family: system-ui, sans-serif;
+      transition: opacity 0.2s;
+    }
+
+    button:hover { opacity: 0.85; }
+
+    #saveBtn {
+      background: #1C1917;
+      color: #FAF7F2;
+    }
+
+    #testBtn {
+      background: transparent;
+      border: 1.5px solid #E3D9CE;
+      color: #9B8E84;
+    }
+
+    #status {
+      margin-top: 12px;
+      font-family: system-ui, sans-serif;
+      font-size: 11px;
+      text-align: center;
+      min-height: 16px;
+      transition: color 0.2s;
+    }
+
+    .status-ok  { color: #7A9E7A; }
+    .status-err { color: #C47A70; }
+    .status-mid { color: #9B8E84; }
+
+    hr {
+      border: none;
+      border-top: 1px solid #E3D9CE;
+      margin: 16px 0;
+    }
+
+    .hint {
+      font-family: system-ui, sans-serif;
+      font-size: 10px;
+      color: #C4B5AC;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <h1>i have nothing to wear.ai</h1>
+  <p class="sub">inspo saver</p>
+
+  <label>your app url</label>
+  <input id="urlInput" type="url" placeholder="https://your-app.up.railway.app" />
+
+  <div class="row">
+    <button id="saveBtn">save</button>
+    <button id="testBtn">test connection</button>
+  </div>
+
+  <div id="status"></div>
+
+  <hr />
+
+  <p class="hint">
+    once saved, right-click any image on Pinterest or anywhere else and choose
+    <em>"Save to inspo board ✦"</em>
+  </p>
+
+  <script src="popup.js"></script>
+</body>
+</html>
