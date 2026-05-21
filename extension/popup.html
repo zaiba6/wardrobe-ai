@@ -8,29 +8,47 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      width: 280px;
+      width: 300px;
       font-family: 'Georgia', serif;
       background: #FAF7F2;
       color: #1C1917;
-      padding: 20px;
+      padding: 16px;
     }
 
     h1 {
       font-style: italic;
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 400;
       color: #1C1917;
-      margin-bottom: 4px;
+      margin-bottom: 2px;
     }
 
     p.sub {
       font-family: system-ui, sans-serif;
-      font-size: 11px;
+      font-size: 10px;
       color: #9B8E84;
       letter-spacing: 0.06em;
       text-transform: uppercase;
-      margin-bottom: 18px;
+      margin-bottom: 14px;
     }
+
+    /* Settings toggle */
+    #settingsToggle {
+      background: none;
+      border: none;
+      font-family: system-ui, sans-serif;
+      font-size: 10px;
+      color: #9B8E84;
+      cursor: pointer;
+      padding: 0;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      float: right;
+      margin-top: 2px;
+    }
+
+    #settingsPanel { display: none; margin-bottom: 12px; }
+    #settingsPanel.open { display: block; }
 
     label {
       font-family: system-ui, sans-serif;
@@ -39,7 +57,7 @@
       letter-spacing: 0.08em;
       color: #9B8E84;
       display: block;
-      margin-bottom: 6px;
+      margin-bottom: 5px;
     }
 
     input {
@@ -47,8 +65,8 @@
       border: none;
       border-bottom: 1.5px solid #E3D9CE;
       background: transparent;
-      padding: 6px 0;
-      font-size: 12px;
+      padding: 5px 0;
+      font-size: 11px;
       color: #1C1917;
       font-family: system-ui, sans-serif;
       outline: none;
@@ -59,83 +77,74 @@
 
     .row {
       display: flex;
-      gap: 8px;
-      margin-top: 14px;
+      gap: 6px;
+      margin-top: 10px;
     }
 
-    button {
+    .row button {
       flex: 1;
       border: none;
       border-radius: 99px;
-      padding: 8px;
-      font-size: 12px;
+      padding: 6px;
+      font-size: 11px;
       cursor: pointer;
       font-family: system-ui, sans-serif;
       transition: opacity 0.2s;
     }
 
-    button:hover { opacity: 0.85; }
-
-    #saveBtn {
-      background: #1C1917;
-      color: #FAF7F2;
-    }
-
-    #testBtn {
-      background: transparent;
-      border: 1.5px solid #E3D9CE;
-      color: #9B8E84;
-    }
+    .row button:hover { opacity: 0.85; }
+    #saveBtn { background: #1C1917; color: #FAF7F2; }
+    #testBtn { background: transparent; border: 1.5px solid #E3D9CE; color: #9B8E84; }
 
     #status {
-      margin-top: 12px;
+      margin-top: 8px;
       font-family: system-ui, sans-serif;
-      font-size: 11px;
+      font-size: 10px;
       text-align: center;
-      min-height: 16px;
-      transition: color 0.2s;
+      min-height: 14px;
     }
 
     .status-ok  { color: #7A9E7A; }
     .status-err { color: #C47A70; }
     .status-mid { color: #9B8E84; }
 
-    hr {
-      border: none;
-      border-top: 1px solid #E3D9CE;
-      margin: 16px 0;
+    hr { border: none; border-top: 1px solid #E3D9CE; margin: 12px 0; }
+
+    /* Recent board */
+    .board-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
     }
 
-    .hint {
-      font-family: system-ui, sans-serif;
-      font-size: 10px;
-      color: #C4B5AC;
-      line-height: 1.5;
-    }
-
-    #recentSection { display: none; }
-
-    #recentSection h2 {
+    .board-header span {
       font-family: system-ui, sans-serif;
       font-size: 10px;
       text-transform: uppercase;
       letter-spacing: 0.08em;
       color: #9B8E84;
-      margin-bottom: 10px;
+    }
+
+    .board-header .count {
+      font-family: system-ui, sans-serif;
+      font-size: 10px;
+      color: #C4B5AC;
     }
 
     .grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 6px;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
     }
 
     .thumb {
       aspect-ratio: 1;
-      border-radius: 8px;
+      border-radius: 6px;
       overflow: hidden;
       background: #F0EAE2;
       border: 1px solid #E3D9CE;
+      position: relative;
     }
 
     .thumb img {
@@ -143,25 +152,39 @@
       height: 100%;
       object-fit: cover;
       display: block;
+      transition: transform 0.2s;
     }
 
-    .thumb-empty {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 18px;
+    .thumb:hover img { transform: scale(1.05); }
+
+    .thumb.new::after {
+      content: '✦';
+      position: absolute;
+      top: 2px;
+      right: 3px;
+      font-size: 8px;
+      color: #B5756A;
+      text-shadow: 0 0 4px #FAF7F2;
+    }
+
+    .empty-board {
+      font-family: system-ui, sans-serif;
+      font-size: 11px;
+      color: #C4B5AC;
+      font-style: italic;
+      text-align: center;
+      padding: 14px 0;
     }
 
     #openApp {
       display: block;
       width: 100%;
-      margin-top: 10px;
+      margin-top: 8px;
       text-align: center;
       font-family: system-ui, sans-serif;
-      font-size: 11px;
+      font-size: 10px;
       color: #B5756A;
-      text-decoration: none;
-      padding: 6px;
+      padding: 5px;
       border: 1.5px solid #EED9D5;
       border-radius: 99px;
       cursor: pointer;
@@ -169,33 +192,59 @@
     }
 
     #openApp:hover { background: #EED9D5; }
+
+    .hint {
+      font-family: system-ui, sans-serif;
+      font-size: 10px;
+      color: #C4B5AC;
+      line-height: 1.5;
+      text-align: center;
+      margin-top: 8px;
+    }
+
+    #loadingSpinner {
+      text-align: center;
+      padding: 14px 0;
+      font-family: system-ui, sans-serif;
+      font-size: 10px;
+      color: #C4B5AC;
+    }
   </style>
 </head>
 <body>
-  <h1>IHaveNothingToWear.ai</h1>
-  <p class="sub">inspo saver</p>
-
-  <label>your app url</label>
-  <input id="urlInput" type="url" placeholder="https://your-app.up.railway.app" />
-
-  <div class="row">
-    <button id="saveBtn">save</button>
-    <button id="testBtn">test connection</button>
+  <div style="display:flex; align-items:flex-start; justify-content:space-between;">
+    <div>
+      <h1>IHaveNothingToWear.ai</h1>
+      <p class="sub">inspo saver</p>
+    </div>
+    <button id="settingsToggle">settings</button>
   </div>
 
-  <div id="status"></div>
-
-  <hr />
-
-  <div id="recentSection">
-    <h2>recently saved</h2>
-    <div class="grid" id="recentGrid"></div>
-    <button id="openApp">open full app →</button>
+  <!-- Settings panel (collapsed by default) -->
+  <div id="settingsPanel">
+    <label>your app url</label>
+    <input id="urlInput" type="url" placeholder="https://your-app.up.railway.app" />
+    <div class="row">
+      <button id="saveBtn">save</button>
+      <button id="testBtn">test</button>
+    </div>
+    <div id="status"></div>
+    <hr />
   </div>
 
-  <p class="hint" id="hintText">
-    right-click any image and choose <em>"Save to inspo board ✦"</em>
-  </p>
+  <!-- Inspo board -->
+  <div class="board-header">
+    <span>inspo board</span>
+    <span class="count" id="boardCount"></span>
+  </div>
+
+  <div id="loadingSpinner">loading…</div>
+  <div class="grid" id="recentGrid" style="display:none"></div>
+  <div class="empty-board" id="emptyBoard" style="display:none">
+    right-click any image →<br><em>"Save to inspo board ✦"</em>
+  </div>
+
+  <button id="openApp" style="display:none">open full app →</button>
 
   <script src="popup.js"></script>
 </body>

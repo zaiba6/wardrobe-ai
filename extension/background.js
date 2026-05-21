@@ -33,6 +33,8 @@ chrome.contextMenus.onClicked.addListener(async (info) => {
     if (res.ok) {
       chrome.action.setBadgeText({ text: '✓' })
       chrome.action.setBadgeBackgroundColor({ color: '#7A9E7A' })
+      // Tell the popup to refresh the grid if it's open
+      chrome.runtime.sendMessage({ type: 'inspo_saved' }).catch(() => {})
     } else {
       chrome.action.setBadgeText({ text: '✗' })
       chrome.action.setBadgeBackgroundColor({ color: '#C47A70' })
