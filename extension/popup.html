@@ -112,6 +112,63 @@
       color: #C4B5AC;
       line-height: 1.5;
     }
+
+    #recentSection { display: none; }
+
+    #recentSection h2 {
+      font-family: system-ui, sans-serif;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #9B8E84;
+      margin-bottom: 10px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+
+    .thumb {
+      aspect-ratio: 1;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #F0EAE2;
+      border: 1px solid #E3D9CE;
+    }
+
+    .thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .thumb-empty {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+
+    #openApp {
+      display: block;
+      width: 100%;
+      margin-top: 10px;
+      text-align: center;
+      font-family: system-ui, sans-serif;
+      font-size: 11px;
+      color: #B5756A;
+      text-decoration: none;
+      padding: 6px;
+      border: 1.5px solid #EED9D5;
+      border-radius: 99px;
+      cursor: pointer;
+      background: transparent;
+    }
+
+    #openApp:hover { background: #EED9D5; }
   </style>
 </head>
 <body>
@@ -130,9 +187,14 @@
 
   <hr />
 
-  <p class="hint">
-    once saved, right-click any image on Pinterest or anywhere else and choose
-    <em>"Save to inspo board ✦"</em>
+  <div id="recentSection">
+    <h2>recently saved</h2>
+    <div class="grid" id="recentGrid"></div>
+    <button id="openApp">open full app →</button>
+  </div>
+
+  <p class="hint" id="hintText">
+    right-click any image and choose <em>"Save to inspo board ✦"</em>
   </p>
 
   <script src="popup.js"></script>
