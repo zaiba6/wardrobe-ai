@@ -12,34 +12,39 @@ chrome.contextMenus.onClicked.addListener(async (info) => {
   const { backendUrl } = await chrome.storage.sync.get(['backendUrl'])
 
   if (!backendUrl) {
-    // Flash the badge to tell user to configure first
     chrome.action.setBadgeText({ text: '!' })
     chrome.action.setBadgeBackgroundColor({ color: '#B5756A' })
     setTimeout(() => chrome.action.setBadgeText({ text: '' }), 3000)
     return
   }
 
-  // Flash saving state
   chrome.action.setBadgeText({ text: '…' })
   chrome.action.setBadgeBackgroundColor({ color: '#9B8E84' })
 
   try {
-    const res = await fetch(`${backendUrl}/api/inspo/save-url`, {
+    // Fetch the image in the browser (has access to Pinterest CDN, cookies, etc.)
+    const imgRes = await fetch(info.srcUrl)
+    if (!imgRes.ok) throw new Error(`image fetch failed: ${imgRes.status}`)
+    const blob = await imgRes.blob()
+
+    // Send as a file upload — same endpoint the app uses
+    const formData = new FormData()
+    formData.append('image', blob, 'inspo.jpg')
+
+    const res = await fetch(`${backendUrl}/api/inspo/upload`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image_url: info.srcUrl }),
+      body: formData,
     })
 
     if (res.ok) {
       chrome.action.setBadgeText({ text: '✓' })
       chrome.action.setBadgeBackgroundColor({ color: '#7A9E7A' })
-      // Tell the popup to refresh the grid if it's open
       chrome.runtime.sendMessage({ type: 'inspo_saved' }).catch(() => {})
     } else {
-      chrome.action.setBadgeText({ text: '✗' })
-      chrome.action.setBadgeBackgroundColor({ color: '#C47A70' })
+      throw new Error(`upload failed: ${res.status}`)
     }
-  } catch {
+  } catch (err) {
+    console.error('IHaveNothingToWear save error:', err)
     chrome.action.setBadgeText({ text: '✗' })
     chrome.action.setBadgeBackgroundColor({ color: '#C47A70' })
   }
