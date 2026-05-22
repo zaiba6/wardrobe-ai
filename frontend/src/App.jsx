@@ -34,7 +34,7 @@ function AppShell() {
           <div className="mb-5 flex items-start justify-between">
             <div>
               <h1 className="serif-italic text-3xl leading-none" style={{ color: '#1C1917' }}>
-                ButWhatDoIWear
+                wait what do i wear.com
               </h1>
               <p className="text-xs mt-1.5 tracking-widest uppercase" style={{ color: '#9B8E84' }}>
                 check your floordrobe

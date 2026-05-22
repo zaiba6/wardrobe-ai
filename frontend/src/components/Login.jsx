@@ -7,7 +7,7 @@ export default function Login() {
         {/* Brand */}
         <div className="space-y-2">
           <h1 className="serif-italic text-4xl leading-tight" style={{ color: '#1C1917' }}>
-            ButWhatDoIWear
+            wait what do i wear.com
           </h1>
           <p className="text-xs tracking-widest uppercase" style={{ color: '#9B8E84' }}>
             check your floordrobe
