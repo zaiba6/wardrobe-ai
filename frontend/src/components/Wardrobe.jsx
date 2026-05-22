@@ -138,10 +138,12 @@ function EditModal({ item, onSave, onClose }) {
   )
 }
 
+const FORMALITY_SHORT = { casual: 'casual', 'smart-casual': 'smart', formal: 'formal' }
+
 function PhotoCard({ photo, onEditItem, onDeleteItem }) {
   return (
     <div
-      className="rounded-xl overflow-hidden border"
+      className="rounded-xl overflow-hidden border group"
       style={{ backgroundColor: '#fff', borderColor: '#E3D9CE' }}
     >
       <div className="aspect-square overflow-hidden" style={{ backgroundColor: '#F0EAE2' }}>
@@ -150,29 +152,35 @@ function PhotoCard({ photo, onEditItem, onDeleteItem }) {
       <div className="p-2.5 space-y-1.5">
         {photo.items.map(item => (
           <div key={item.id} className="flex items-center gap-1 group/row">
+            {/* subtype/type pill */}
             <span
               className="text-xs px-2 py-0.5 rounded-full flex-1 min-w-0 truncate capitalize"
               style={{ backgroundColor: '#EED9D5', color: '#8B4A42' }}
             >
               {item.subtype || item.type}
             </span>
-            <span className="text-[10px] shrink-0 capitalize hidden sm:block" style={{ color: '#C4B5AC' }}>
-              {item.color?.split(' ')[0]}
-            </span>
+            {/* formality tag — always visible */}
+            {item.formality && (
+              <span className="text-[10px] shrink-0 capitalize" style={{ color: '#C4B5AC' }}>
+                {FORMALITY_SHORT[item.formality] ?? item.formality}
+              </span>
+            )}
+            {/* edit — always visible */}
             <button
               onClick={() => onEditItem(item)}
-              className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity"
-              style={{ color: '#9B8E84' }}
-              title="Edit"
+              className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center transition-colors hover:text-[#B5756A]"
+              style={{ color: '#C4B5AC' }}
+              title="Edit tags"
             >
               <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 11l6.5-6.5a2 2 0 012.828 2.828L11.828 13.828A4 4 0 019 15H7v-2a4 4 0 012-3.468z" />
               </svg>
             </button>
+            {/* delete — appears on row hover */}
             <button
               onClick={() => onDeleteItem(item.id)}
-              className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity"
-              style={{ color: '#9B8E84' }}
+              className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity hover:text-[#C47A70]"
+              style={{ color: '#C4B5AC' }}
               title="Remove"
             >
               <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -223,6 +231,16 @@ export default function Wardrobe() {
   const [detected, setDetected] = useState(null)       // currently shown confirmation sheet
   const [detectedQueue, setDetectedQueue] = useState([]) // remaining multi-item photos waiting
 
+  // Returns existing item if a close match is found (same type+subtype, overlapping color word)
+  const findDuplicate = (detectedItem) => {
+    const colorWord = detectedItem.color?.toLowerCase().split(/\s+/)[0]
+    return clothes.find(c =>
+      c.type === detectedItem.type &&
+      c.subtype === detectedItem.subtype &&
+      colorWord && c.color?.toLowerCase().includes(colorWord)
+    ) ?? null
+  }
+
   const _advanceQueue = (queue) => {
     if (queue.length > 0) {
       setDetectedQueue(queue.slice(1))
@@ -245,13 +263,17 @@ export default function Wardrobe() {
         fd.append('image', list[i])
         const res = await axios.post(`${API}/api/clothes/detect`, fd)
         const { filename, image_url, items } = res.data
-        if (items.length === 1) {
-          // single item — save immediately, keep looping
+        // Tag each item with a duplicate match (if any)
+        const itemsTagged = items.map(it => ({ ...it, _dup: findDuplicate(it) }))
+        const hasDup = itemsTagged.some(it => it._dup)
+
+        if (items.length === 1 && !hasDup) {
+          // single unique item — save immediately, keep looping
           const save = await axios.post(`${API}/api/clothes/save-detected`, { filename, items })
           setClothes(p => [...save.data, ...p])
         } else {
-          // queue for confirmation — don't stop processing remaining files
-          multiQueue.push({ filename, image_url, items, selected: items.map((_, idx) => idx) })
+          // multi-item OR has a duplicate — queue for confirmation
+          multiQueue.push({ filename, image_url, items: itemsTagged, selected: items.map((_, idx) => idx) })
         }
       } catch {
         // skip failed photo, continue
@@ -268,7 +290,10 @@ export default function Wardrobe() {
 
   const handleConfirmDetected = async () => {
     if (!detected) return
-    const chosen = detected.items.filter((_, idx) => detected.selected.includes(idx))
+    // Strip internal _dup marker before sending to API
+    const chosen = detected.items
+      .filter((_, idx) => detected.selected.includes(idx))
+      .map(({ _dup, ...rest }) => rest)
     try {
       const res = await axios.post(`${API}/api/clothes/save-detected`, {
         filename: detected.filename,
@@ -480,7 +505,14 @@ export default function Wardrobe() {
                         )}
                       </div>
                       <div className="flex-1 space-y-1">
-                        <p className="text-sm font-medium capitalize" style={{ color: '#1C1917' }}>{item.description || item.type}</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-medium capitalize" style={{ color: '#1C1917' }}>{item.description || item.type}</p>
+                          {item._dup && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#FEF3C7', color: '#92400E' }}>
+                              already in closet
+                            </span>
+                          )}
+                        </div>
                         <div className="flex flex-wrap gap-1">
                           {[item.type, item.color, item.fit].filter(Boolean).map((tag, t) => (
                             <span key={t} className="text-xs px-2 py-0.5 rounded-full border capitalize" style={{ borderColor: '#E3D9CE', color: '#9B8E84' }}>

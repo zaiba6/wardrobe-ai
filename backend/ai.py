@@ -73,7 +73,7 @@ def tag_clothing_image(image_path: str) -> dict:
                                 '- "fit": one of [loose, oversized, regular, fitted, bodycon]\n'
                                 '- "formality": one of [casual, smart-casual, formal]\n'
                                 '- "season": one of [all-season, spring-summer, fall-winter]\n'
-                                '- "description": one sentence describing the item\n\n'
+                                '- "description": a short label max 5 words, e.g. "blue striped short-sleeve top"\n\n'
                                 "Return ONLY valid JSON. No markdown, no explanation."
                             ),
                         },
@@ -128,7 +128,7 @@ def detect_all_items(image_path: str) -> list[dict]:
                         '- "fit": one of [loose, oversized, regular, fitted, bodycon]\n'
                         '- "formality": one of [casual, smart-casual, formal]\n'
                         '- "season": one of [all-season, spring-summer, fall-winter]\n'
-                        '- "description": one sentence description\n\n'
+                        '- "description": a short label max 5 words, e.g. "black high-waist straight jeans"\n\n'
                         "Return a JSON ARRAY of all items found. Single item = single-element array.\n"
                         "Return ONLY valid JSON. No markdown, no explanation."
                     )},

@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from ai import analyze_inspo_image, detect_all_items, suggest_vibe_outfit, tag_clothing_image
 from database import Base, engine, get_db
 from models import ClothingItem, InspoItem
-from weather import get_weather
+from weather import get_weather, get_weather_by_coords
 
 load_dotenv()
 
@@ -131,13 +131,29 @@ class SaveDetectedBody(BaseModel):
 
 class OutfitSuggestBody(BaseModel):
     mood: str
-    city: str
+    city: Optional[str] = None
+    lat: Optional[float] = None
+    lon: Optional[float] = None
 
 
 class VibeOutfitBody(BaseModel):
     vibe: str
-    city: str
+    city: Optional[str] = None
+    lat: Optional[float] = None
+    lon: Optional[float] = None
     mood: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Weather resolution helper
+# ---------------------------------------------------------------------------
+
+def _resolve_weather(city: Optional[str], lat: Optional[float], lon: Optional[float]) -> dict:
+    if lat is not None and lon is not None:
+        return get_weather_by_coords(lat, lon)
+    if city:
+        return get_weather(city)
+    raise HTTPException(status_code=400, detail="Provide either a city name or coordinates.")
 
 
 # ---------------------------------------------------------------------------
@@ -439,9 +455,8 @@ def delete_clothing(item_id: int, db: Session = Depends(get_db)):
 @app.post("/api/outfit/suggest")
 def suggest_outfit(body: OutfitSuggestBody, db: Session = Depends(get_db)):
     mood = body.mood
-    city = body.city
 
-    weather = get_weather(city)  # raises HTTPException on failure
+    weather = _resolve_weather(body.city, body.lat, body.lon)
     temp = weather["temp_celsius"]
 
     all_clothes = db.query(ClothingItem).all()
@@ -546,7 +561,7 @@ def suggest_outfit(body: OutfitSuggestBody, db: Session = Depends(get_db)):
 
 @app.post("/api/outfit/vibe")
 def suggest_vibe_outfit_endpoint(body: VibeOutfitBody, db: Session = Depends(get_db)):
-    weather = get_weather(body.city)
+    weather = _resolve_weather(body.city, body.lat, body.lon)
     all_clothes = db.query(ClothingItem).all()
 
     if not all_clothes:

@@ -32,9 +32,7 @@ function WeatherStrip({ weather }) {
         <p className="text-xs capitalize" style={{ color: '#9B8E84' }}>{weather.description}</p>
       </div>
       <div className="text-right">
-        <p className="text-lg font-medium" style={{ color: '#1C1917' }}>
-          {Math.round(weather.temp_fahrenheit)}°F
-        </p>
+        <p className="text-lg font-medium" style={{ color: '#1C1917' }}>{Math.round(weather.temp_fahrenheit)}°F</p>
         <p className="text-xs" style={{ color: '#9B8E84' }}>{Math.round(weather.temp_celsius)}°C</p>
       </div>
     </div>
@@ -58,30 +56,59 @@ function OutfitItemTile({ item }) {
 }
 
 export default function GetDressed() {
-  const [mood, setMood] = useState(null)
-  const [city, setCity] = useState('')
   const [occasion, setOccasion] = useState('')
-  const [result, setResult] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [mood, setMood]         = useState(null)
+  const [city, setCity]         = useState('')
+  const [coords, setCoords]     = useState(null)   // { lat, lon } from browser
+  const [locating, setLocating] = useState(false)
+  const [result, setResult]     = useState(null)
+  const [loading, setLoading]   = useState(false)
+  const [error, setError]       = useState('')
 
-  const isVibeMode = occasion.trim().length > 0
+  const isVibeMode   = occasion.trim().length > 0
+  const hasLocation  = coords !== null || city.trim().length > 0
+  const canSubmit    = mood && hasLocation && !loading
+
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser — type your city instead.')
+      return
+    }
+    setLocating(true)
+    setError('')
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude })
+        setCity('')
+        setLocating(false)
+      },
+      () => {
+        setLocating(false)
+        setError('Could not get your location — please type your city instead.')
+      }
+    )
+  }
 
   const handleSubmit = async () => {
-    if (!mood || !city.trim() || loading) return
+    if (!canSubmit) return
     setLoading(true)
     setError('')
     setResult(null)
+
+    const locationPayload = coords
+      ? { lat: coords.lat, lon: coords.lon }
+      : { city: city.trim() }
+
     try {
       if (isVibeMode) {
         const res = await axios.post(`${API}/api/outfit/vibe`, {
           vibe: occasion.trim(),
-          city: city.trim(),
           mood,
+          ...locationPayload,
         })
         setResult({ ...res.data, mode: 'vibe' })
       } else {
-        const res = await axios.post(`${API}/api/outfit/suggest`, { mood, city: city.trim() })
+        const res = await axios.post(`${API}/api/outfit/suggest`, { mood, ...locationPayload })
         setResult({ ...res.data, mode: 'mood' })
       }
     } catch (err) {
@@ -103,11 +130,32 @@ export default function GetDressed() {
           so, what are we wearing?
         </h2>
         <p className="text-sm mt-1" style={{ color: '#9B8E84' }}>
-          tell me your vibe and where you are
+          tell me the plan, the vibe, and where you are
         </p>
       </div>
 
-      {/* Mood */}
+      {/* 1 — Occasion */}
+      <div className="space-y-2">
+        <p className="text-xs uppercase tracking-widest" style={{ color: '#9B8E84' }}>
+          occasion <span style={{ color: '#C4B5AC', textTransform: 'none', letterSpacing: 'normal' }}>— optional</span>
+        </p>
+        <input
+          type="text"
+          value={occasion}
+          onChange={e => setOccasion(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+          placeholder="office meeting, dinner date, beach day…"
+          className="w-full border-b-2 bg-transparent pb-2 text-sm focus:outline-none transition-all"
+          style={{ borderColor: occasion ? '#B5756A' : '#E3D9CE', color: '#1C1917' }}
+        />
+        {isVibeMode && (
+          <p className="text-xs" style={{ color: '#C4B5AC' }}>
+            ✦ i'll pick specific pieces from your closet for this look
+          </p>
+        )}
+      </div>
+
+      {/* 2 — Vibe / Mood */}
       <div className="space-y-3">
         <p className="text-xs uppercase tracking-widest" style={{ color: '#9B8E84' }}>how are you feeling today</p>
         <div className="flex gap-3 flex-wrap">
@@ -129,45 +177,60 @@ export default function GetDressed() {
         </div>
       </div>
 
-      {/* City */}
-      <div className="space-y-2">
-        <p className="text-xs uppercase tracking-widest" style={{ color: '#9B8E84' }}>your city</p>
-        <input
-          type="text"
-          value={city}
-          onChange={e => setCity(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-          placeholder="e.g. Boston, New York, London…"
-          className="w-full border-b-2 bg-transparent pb-2 text-sm focus:outline-none transition-all"
-          style={{ borderColor: city ? '#B5756A' : '#E3D9CE', color: '#1C1917' }}
-        />
-      </div>
+      {/* 3 — Location */}
+      <div className="space-y-3">
+        <p className="text-xs uppercase tracking-widest" style={{ color: '#9B8E84' }}>your location</p>
 
-      {/* Occasion (optional — activates AI styling) */}
-      <div className="space-y-2">
-        <p className="text-xs uppercase tracking-widest" style={{ color: '#9B8E84' }}>
-          occasion <span style={{ color: '#C4B5AC', textTransform: 'none', letterSpacing: 'normal' }}>— optional</span>
-        </p>
-        <input
-          type="text"
-          value={occasion}
-          onChange={e => setOccasion(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-          placeholder="office meeting, dinner date, beach day…"
-          className="w-full border-b-2 bg-transparent pb-2 text-sm focus:outline-none transition-all"
-          style={{ borderColor: occasion ? '#B5756A' : '#E3D9CE', color: '#1C1917' }}
-        />
-        {isVibeMode && (
-          <p className="text-xs" style={{ color: '#C4B5AC' }}>
-            ✦ i'll pick specific pieces from your closet for this look
-          </p>
+        {coords ? (
+          /* Location detected */
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 rounded-full px-3 py-1.5 border flex-1" style={{ borderColor: '#B5756A', backgroundColor: '#EED9D5' }}>
+              <span className="text-sm">📍</span>
+              <span className="text-xs" style={{ color: '#8B4A42' }}>location detected</span>
+            </div>
+            <button
+              onClick={() => setCoords(null)}
+              className="text-xs rounded-full px-3 py-1.5 border transition-all"
+              style={{ borderColor: '#E3D9CE', color: '#9B8E84' }}
+            >
+              change ×
+            </button>
+          </div>
+        ) : (
+          /* City input + use location button */
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleGetLocation}
+                disabled={locating}
+                className="flex items-center gap-1.5 rounded-full px-3 py-1.5 border text-xs transition-all disabled:opacity-60 shrink-0"
+                style={{ borderColor: '#E3D9CE', color: '#9B8E84', backgroundColor: '#fff' }}
+              >
+                {locating
+                  ? <span className="w-3 h-3 rounded-full border border-[#E3D9CE] border-t-[#B5756A] animate-spin inline-block" />
+                  : '📍'
+                }
+                {locating ? 'locating…' : 'use my location'}
+              </button>
+              <span className="text-xs" style={{ color: '#C4B5AC' }}>or</span>
+            </div>
+            <input
+              type="text"
+              value={city}
+              onChange={e => setCity(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+              placeholder="type your city…"
+              className="w-full border-b-2 bg-transparent pb-2 text-sm focus:outline-none transition-all"
+              style={{ borderColor: city ? '#B5756A' : '#E3D9CE', color: '#1C1917' }}
+            />
+          </div>
         )}
       </div>
 
       {/* Submit */}
       <button
         onClick={handleSubmit}
-        disabled={!mood || !city.trim() || loading}
+        disabled={!canSubmit}
         className="flex items-center gap-2 rounded-full px-7 py-3 text-sm font-medium transition-all disabled:opacity-40"
         style={{ backgroundColor: '#1C1917', color: '#FAF7F2' }}
       >
@@ -188,7 +251,6 @@ export default function GetDressed() {
           {result.weather && <WeatherStrip weather={result.weather} />}
 
           {result.mode === 'vibe' ? (
-            /* AI-picked specific outfit */
             <div className="space-y-4">
               <p className="serif text-lg" style={{ color: '#1C1917' }}>
                 styled for <em>{occasion}</em> —
@@ -212,7 +274,6 @@ export default function GetDressed() {
               )}
             </div>
           ) : (
-            /* Mood-based outfits */
             hasOutfits ? (
               <div className="space-y-4">
                 <p className="serif text-lg" style={{ color: '#1C1917' }}>here's what i'd wear —</p>
