@@ -3,6 +3,22 @@ import axios from 'axios'
 
 const API = import.meta.env.VITE_API_URL ?? ''
 
+async function saveOutfitLog({ items, mood, occasion, weather }) {
+  try {
+    await axios.post(`${API}/api/outfits/log`, {
+      items,
+      mood,
+      occasion: occasion || null,
+      weather_city:      weather?.city      ?? null,
+      weather_temp_c:    weather?.temp_celsius ?? null,
+      weather_condition: weather?.condition  ?? null,
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
 const MOODS = [
   { key: 'Comfy',        label: 'comfy',         sub: 'loose & cozy',      emoji: '🫂' },
   { key: 'Casual',       label: 'casual',        sub: 'everyday ease',     emoji: '👟' },
@@ -51,6 +67,54 @@ function OutfitItemTile({ item }) {
       {item.color && (
         <p className="text-[10px] text-center capitalize leading-tight" style={{ color: '#9B8E84' }}>{item.color}</p>
       )}
+    </div>
+  )
+}
+
+function EmptyOutfit() {
+  return (
+    <div className="text-center py-12 space-y-2">
+      <p className="serif-italic text-xl" style={{ color: '#C4B5AC' }}>not enough pieces yet</p>
+      <p className="text-sm" style={{ color: '#C4B5AC' }}>add more to your closet to get outfit suggestions</p>
+    </div>
+  )
+}
+
+function OutfitCard({ outfit, mood, occasion, weather }) {
+  const [saved, setSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  const handleSave = async () => {
+    setSaving(true)
+    const ok = await saveOutfitLog({ items: outfit.items, mood, occasion, weather })
+    setSaving(false)
+    if (ok) setSaved(true)
+  }
+
+  return (
+    <div className="rounded-2xl border p-5 space-y-4" style={{ backgroundColor: '#fff', borderColor: '#E3D9CE' }}>
+      {outfit.reason && (
+        <p className="text-xs italic" style={{ color: '#9B8E84' }}>{outfit.reason}</p>
+      )}
+      <div className="flex gap-3 flex-wrap">
+        {outfit.items.map((item, j) => (
+          <OutfitItemTile key={item.id ?? j} item={item} />
+        ))}
+      </div>
+      {/* Save button */}
+      <div className="pt-1">
+        <button
+          onClick={handleSave}
+          disabled={saved || saving}
+          className="text-xs rounded-full px-4 py-1.5 border transition-all disabled:opacity-60"
+          style={saved
+            ? { borderColor: '#7A9E7A', color: '#7A9E7A', backgroundColor: '#F0F7F0' }
+            : { borderColor: '#E3D9CE', color: '#9B8E84' }
+          }
+        >
+          {saved ? 'saved to outfits worn ✓' : saving ? 'saving…' : 'save this look ✦'}
+        </button>
+      </div>
     </div>
   )
 }
@@ -256,21 +320,14 @@ export default function GetDressed() {
                 styled for <em>{occasion}</em> —
               </p>
               {hasOutfits ? (
-                <div className="rounded-2xl border p-5 space-y-4" style={{ backgroundColor: '#fff', borderColor: '#E3D9CE' }}>
-                  {result.outfit.reason && (
-                    <p className="text-xs italic" style={{ color: '#9B8E84' }}>{result.outfit.reason}</p>
-                  )}
-                  <div className="flex gap-3 flex-wrap">
-                    {result.outfit.items.map((item, j) => (
-                      <OutfitItemTile key={item.id ?? j} item={item} />
-                    ))}
-                  </div>
-                </div>
+                <OutfitCard
+                  outfit={result.outfit}
+                  mood={mood}
+                  occasion={occasion}
+                  weather={result.weather}
+                />
               ) : (
-                <div className="text-center py-12 space-y-2">
-                  <p className="serif-italic text-xl" style={{ color: '#C4B5AC' }}>not enough pieces yet</p>
-                  <p className="text-sm" style={{ color: '#C4B5AC' }}>add more to your closet to get outfit suggestions</p>
-                </div>
+                <EmptyOutfit />
               )}
             </div>
           ) : (
@@ -278,23 +335,11 @@ export default function GetDressed() {
               <div className="space-y-4">
                 <p className="serif text-lg" style={{ color: '#1C1917' }}>here's what i'd wear —</p>
                 {result.outfits.filter(o => o.items?.length > 0).map((outfit, i) => (
-                  <div key={i} className="rounded-2xl border p-5 space-y-4" style={{ backgroundColor: '#fff', borderColor: '#E3D9CE' }}>
-                    {outfit.reason && (
-                      <p className="text-xs italic" style={{ color: '#9B8E84' }}>{outfit.reason}</p>
-                    )}
-                    <div className="flex gap-3 flex-wrap">
-                      {outfit.items.map((item, j) => (
-                        <OutfitItemTile key={item.id ?? j} item={item} />
-                      ))}
-                    </div>
-                  </div>
+                  <OutfitCard key={i} outfit={outfit} mood={mood} occasion={occasion} weather={result.weather} />
                 ))}
               </div>
             ) : (
-              <div className="text-center py-12 space-y-2">
-                <p className="serif-italic text-xl" style={{ color: '#C4B5AC' }}>not enough pieces yet</p>
-                <p className="text-sm" style={{ color: '#C4B5AC' }}>add more to your closet to get outfit suggestions</p>
-              </div>
+              <EmptyOutfit />
             )
           )}
         </div>
