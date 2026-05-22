@@ -7,7 +7,7 @@ import Inspo from './components/Inspo'
 import OutfitsWorn from './components/OutfitsWorn'
 
 const TABS = [
-  { key: 'closet', label: 'the closet' },
+  { key: 'closet', label: 'the floordrobe' },
   { key: 'today',  label: "today's look" },
   { key: 'worn',   label: 'outfits worn' },
   { key: 'inspo',  label: 'inspo board' },
@@ -34,10 +34,10 @@ function AppShell() {
           <div className="mb-5 flex items-start justify-between">
             <div>
               <h1 className="serif-italic text-3xl leading-none" style={{ color: '#1C1917' }}>
-                IHaveNothingToWear.ai
+                ButWhatDoIWear
               </h1>
               <p className="text-xs mt-1.5 tracking-widest uppercase" style={{ color: '#9B8E84' }}>
-                your personal style archive
+                check your floordrobe
               </p>
             </div>
 

@@ -7,10 +7,10 @@ export default function Login() {
         {/* Brand */}
         <div className="space-y-2">
           <h1 className="serif-italic text-4xl leading-tight" style={{ color: '#1C1917' }}>
-            IHaveNothingToWear.ai
+            ButWhatDoIWear
           </h1>
           <p className="text-xs tracking-widest uppercase" style={{ color: '#9B8E84' }}>
-            your personal style archive
+            check your floordrobe
           </p>
         </div>
 

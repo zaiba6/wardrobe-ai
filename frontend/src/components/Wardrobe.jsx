@@ -321,7 +321,7 @@ export default function Wardrobe() {
       {/* Header */}
       <div className="flex items-end justify-between">
         <div>
-          <h2 className="serif text-2xl" style={{ color: '#1C1917' }}>the closet</h2>
+          <h2 className="serif text-2xl" style={{ color: '#1C1917' }}>the floordrobe</h2>
           <p className="text-sm mt-0.5" style={{ color: '#9B8E84' }}>
             {photos.length} {photos.length === 1 ? 'photo' : 'photos'} · {clothes.length} {clothes.length === 1 ? 'piece' : 'pieces'}
           </p>
