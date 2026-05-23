@@ -121,6 +121,7 @@ def detect_all_items(image_path: str) -> list[dict]:
                     {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": image_data}},
                     {"type": "text", "text": (
                         "Analyze this fashion photo and identify ALL visible clothing items and accessories.\n"
+                        "IMPORTANT: Only include wearable fashion items. Do NOT include phones, iPhones, electronics, mirrors, furniture, or any non-clothing objects — even if held or visible in the photo.\n"
                         "For each item return a JSON object with:\n"
                         '- "type": one of [top, bottom, dress, outerwear, shoes, accessory, jumpsuit, skirt]\n'
                         '- "subtype": specific subcategory (e.g. crop top, midi skirt, ankle boots, jeans, going out dress)\n'
