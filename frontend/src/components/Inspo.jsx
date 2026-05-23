@@ -113,11 +113,12 @@ export default function Inspo() {
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef(null)
 
-  // Selection state
   // Pinterest import state
-  const [pinterestUrl, setPinterestUrl] = useState('')
-  const [importing, setImporting]       = useState(false)
-  const [importMsg, setImportMsg]       = useState(null)   // { ok: bool, text: str }
+  const [pinterestUrl, setPinterestUrl]   = useState('')
+  const [boardList, setBoardList]         = useState([])   // list of URLs queued to import
+  const [importing, setImporting]         = useState(false)
+  const [importProgress, setImportProgress] = useState(null) // { current, total, count }
+  const [importMsg, setImportMsg]         = useState(null)  // { ok: bool, text: str }
 
   // Selection state
   const [selectedIds, setSelectedIds] = useState(new Set())
@@ -168,21 +169,37 @@ export default function Inspo() {
     setUploadStatus('')
   }
 
+  const addBoard = () => {
+    const url = pinterestUrl.trim()
+    if (!url || boardList.includes(url)) return
+    setBoardList(p => [...p, url])
+    setPinterestUrl('')
+    setImportMsg(null)
+  }
+
   const handlePinterestImport = async () => {
-    if (!pinterestUrl.trim() || importing) return
+    const toImport = boardList.length > 0 ? boardList : pinterestUrl.trim() ? [pinterestUrl.trim()] : []
+    if (!toImport.length || importing) return
     setImporting(true)
     setImportMsg(null)
-    try {
-      const res = await axios.post(`${API}/api/inspo/import-pinterest`, { board_url: pinterestUrl.trim() })
-      setInspoItems(p => [...res.data.items, ...p])
-      fetchRecs()
-      setPinterestUrl('')
-      setImportMsg({ ok: true, text: `imported ${res.data.imported} pins ✦` })
-    } catch (err) {
-      setImportMsg({ ok: false, text: err.response?.data?.detail || 'could not import board — make sure it\'s public' })
-    } finally {
-      setImporting(false)
+    setImportProgress({ current: 0, total: toImport.length, count: 0 })
+    let totalImported = 0
+    for (let i = 0; i < toImport.length; i++) {
+      setImportProgress({ current: i + 1, total: toImport.length, count: totalImported })
+      try {
+        const res = await axios.post(`${API}/api/inspo/import-pinterest`, { board_url: toImport[i] })
+        setInspoItems(p => [...res.data.items, ...p])
+        totalImported += res.data.imported
+      } catch {
+        // skip failed board, continue
+      }
     }
+    fetchRecs()
+    setPinterestUrl('')
+    setBoardList([])
+    setImportProgress(null)
+    setImportMsg({ ok: true, text: `imported ${totalImported} pins from ${toImport.length} board${toImport.length > 1 ? 's' : ''} ✦` })
+    setImporting(false)
   }
 
   const handleDelete = async (id) => {
@@ -269,38 +286,68 @@ export default function Inspo() {
           </svg>
           <p className="text-sm font-medium" style={{ color: '#2D1A0E' }}>link a Pinterest board</p>
         </div>
-        <p className="text-xs" style={{ color: '#9B8E84' }}>paste a public board URL — we'll pull the pins and analyze your style</p>
+        <p className="text-xs" style={{ color: '#9B8E84' }}>paste public board URLs — we'll pull the pins and analyze your style</p>
+
+        {/* URL input row */}
         <div className="flex gap-2">
           <input
             type="url"
             value={pinterestUrl}
             onChange={e => { setPinterestUrl(e.target.value); setImportMsg(null) }}
-            onKeyDown={e => e.key === 'Enter' && handlePinterestImport()}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); boardList.length >= 0 ? addBoard() : handlePinterestImport() } }}
             placeholder="https://www.pinterest.com/you/your-board/"
             className="flex-1 border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#8B1A1A]"
             style={{ borderColor: '#E3D9CE', color: '#2D1A0E', backgroundColor: '#FAF7F2' }}
             disabled={importing}
           />
           <button
-            onClick={handlePinterestImport}
+            onClick={addBoard}
             disabled={importing || !pinterestUrl.trim()}
-            className="shrink-0 rounded-xl px-4 py-2 text-sm font-medium transition-all disabled:opacity-40 flex items-center gap-2"
-            style={{ backgroundColor: '#E60023', color: '#fff' }}
+            className="shrink-0 rounded-xl px-3 py-2 text-sm border transition-all disabled:opacity-40"
+            style={{ borderColor: '#E3D9CE', color: '#9B8E84' }}
           >
-            {importing && <span className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin inline-block" />}
-            {importing ? 'importing…' : 'import'}
+            + add
           </button>
         </div>
+
+        {/* Board list */}
+        {boardList.length > 0 && (
+          <div className="space-y-1.5">
+            {boardList.map((url, i) => (
+              <div key={i} className="flex items-center gap-2 rounded-lg px-3 py-2 border" style={{ borderColor: '#E3D9CE', backgroundColor: '#FAF7F2' }}>
+                <span className="text-xs flex-1 truncate" style={{ color: '#4A3020' }}>{url}</span>
+                <button
+                  onClick={() => setBoardList(p => p.filter((_, j) => j !== i))}
+                  className="shrink-0 text-xs"
+                  style={{ color: '#C4B5AC' }}
+                >×</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Import button */}
+        <button
+          onClick={handlePinterestImport}
+          disabled={importing || (boardList.length === 0 && !pinterestUrl.trim())}
+          className="w-full rounded-xl py-2.5 text-sm font-medium transition-all disabled:opacity-40 flex items-center justify-center gap-2"
+          style={{ backgroundColor: '#E60023', color: '#fff' }}
+        >
+          {importing && <span className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin inline-block" />}
+          {importing
+            ? importProgress
+              ? `board ${importProgress.current} of ${importProgress.total} — ${importProgress.count} pins so far…`
+              : 'importing…'
+            : boardList.length > 1
+              ? `import ${boardList.length} boards`
+              : 'import board'
+          }
+        </button>
+
         {importMsg && (
           <p className="text-xs" style={{ color: importMsg.ok ? '#7A9E7A' : '#8B1A1A' }}>
             {importMsg.text}
           </p>
-        )}
-        {importing && (
-          <div className="flex items-center gap-2">
-            <ClothesLoader />
-            <p className="text-xs" style={{ color: '#9B8E84' }}>analyzing your pins — this takes ~30 seconds</p>
-          </div>
         )}
       </div>
 
