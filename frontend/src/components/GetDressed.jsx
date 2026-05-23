@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import axios from 'axios'
+import ClothesLoader from './ClothesLoader'
 
 const API = import.meta.env.VITE_API_URL ?? ''
 
@@ -88,8 +89,8 @@ function EmptyOutfit() {
   )
 }
 
-function OutfitCard({ outfit, mood, occasion, weather }) {
-  const [saved, setSaved] = useState(false)
+function OutfitCard({ outfit, mood, occasion, weather, onRefresh, refreshing }) {
+  const [saved, setSaved]   = useState(false)
   const [saving, setSaving] = useState(false)
 
   const handleSave = async () => {
@@ -109,8 +110,7 @@ function OutfitCard({ outfit, mood, occasion, weather }) {
           <OutfitItemTile key={item.id ?? j} item={item} />
         ))}
       </div>
-      {/* Save button */}
-      <div className="pt-1">
+      <div className="flex items-center gap-3 pt-1 flex-wrap">
         <button
           onClick={handleSave}
           disabled={saved || saving}
@@ -121,6 +121,15 @@ function OutfitCard({ outfit, mood, occasion, weather }) {
           }
         >
           {saved ? 'saved to outfits worn ✓' : saving ? 'saving…' : 'save this look ✦'}
+        </button>
+        <button
+          onClick={onRefresh}
+          disabled={refreshing}
+          className="text-xs rounded-full px-4 py-1.5 border transition-all disabled:opacity-60 flex items-center gap-1.5"
+          style={{ borderColor: '#E3D9CE', color: '#9B8E84' }}
+        >
+          {refreshing && <span className="w-2.5 h-2.5 rounded-full border border-[#E3D9CE] border-t-[#8B1A1A] animate-spin inline-block" />}
+          {refreshing ? 'finding another…' : 'try another →'}
         </button>
       </div>
     </div>
@@ -136,12 +145,13 @@ export default function GetDressed() {
   const [locating, setLocating] = useState(false)
   const [result, setResult]     = useState(null)
   const [loading, setLoading]   = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError]       = useState('')
+  const [excludeIds, setExcludeIds] = useState([])
 
-  const mood       = moodText.trim() || moodKey
-  const isVibeMode = occasion.trim().length > 0
+  const mood        = moodText.trim() || moodKey
   const hasLocation = coords !== null || city.trim().length > 0
-  const canSubmit   = mood && hasLocation && !loading
+  const canSubmit   = mood && hasLocation && !loading && !refreshing
 
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
@@ -151,16 +161,22 @@ export default function GetDressed() {
     setLocating(true)
     setError('')
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude })
-        setCity('')
-        setLocating(false)
-      },
-      () => {
-        setLocating(false)
-        setError('Could not get your location — please type your city instead.')
-      }
+      (pos) => { setCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude }); setCity(''); setLocating(false) },
+      ()    => { setLocating(false); setError('Could not get your location — please type your city instead.') }
     )
+  }
+
+  const _fetch = async (excludeList) => {
+    const locationPayload = coords
+      ? { lat: coords.lat, lon: coords.lon }
+      : { city: city.trim() }
+    const res = await axios.post(`${API}/api/outfit/suggest`, {
+      mood,
+      occasion: occasion.trim() || null,
+      exclude_ids: excludeList,
+      ...locationPayload,
+    })
+    return res.data
   }
 
   const handleSubmit = async () => {
@@ -168,23 +184,10 @@ export default function GetDressed() {
     setLoading(true)
     setError('')
     setResult(null)
-
-    const locationPayload = coords
-      ? { lat: coords.lat, lon: coords.lon }
-      : { city: city.trim() }
-
+    setExcludeIds([])
     try {
-      if (isVibeMode) {
-        const res = await axios.post(`${API}/api/outfit/vibe`, {
-          vibe: occasion.trim(),
-          mood,
-          ...locationPayload,
-        })
-        setResult({ ...res.data, mode: 'vibe' })
-      } else {
-        const res = await axios.post(`${API}/api/outfit/suggest`, { mood, ...locationPayload })
-        setResult({ ...res.data, mode: 'mood' })
-      }
+      const data = await _fetch([])
+      setResult(data)
     } catch (err) {
       setError(err.response?.data?.detail || 'something went wrong — try again')
     } finally {
@@ -192,9 +195,24 @@ export default function GetDressed() {
     }
   }
 
-  const hasOutfits = result?.mode === 'mood'
-    ? result?.outfits?.some(o => o.items?.length > 0)
-    : result?.outfit?.items?.length > 0
+  const handleRefresh = async () => {
+    if (!result) return
+    const currentIds  = result.outfit?.items?.map(i => i.id) ?? []
+    const newExclude  = [...excludeIds, ...currentIds]
+    setExcludeIds(newExclude)
+    setRefreshing(true)
+    setError('')
+    try {
+      const data = await _fetch(newExclude)
+      setResult(data)
+    } catch (err) {
+      setError(err.response?.data?.detail || 'something went wrong — try again')
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  const hasOutfit = result?.outfit?.items?.length > 0
 
   return (
     <div className="space-y-10 max-w-2xl">
@@ -213,7 +231,6 @@ export default function GetDressed() {
         <p className="text-xs uppercase tracking-widest" style={{ color: '#9B8E84' }}>
           occasion <span style={{ color: '#C4B5AC', textTransform: 'none', letterSpacing: 'normal' }}>— optional</span>
         </p>
-        {/* Quick-fill chips */}
         <div className="flex gap-2 flex-wrap">
           {PRESET_OCCASIONS.map(p => (
             <button
@@ -238,14 +255,14 @@ export default function GetDressed() {
           className="w-full border-b-2 bg-transparent pb-2 text-sm focus:outline-none transition-all"
           style={{ borderColor: occasion ? '#8B1A1A' : '#E3D9CE', color: '#2D1A0E' }}
         />
-        {isVibeMode && (
+        {occasion && (
           <p className="text-xs" style={{ color: '#C4B5AC' }}>
             ✦ i'll pick specific pieces from your closet for this look
           </p>
         )}
       </div>
 
-      {/* 2 — Vibe / Mood */}
+      {/* 2 — Mood */}
       <div className="space-y-3">
         <p className="text-xs uppercase tracking-widest" style={{ color: '#9B8E84' }}>how are you feeling today</p>
         <div className="flex gap-3 flex-wrap">
@@ -279,24 +296,17 @@ export default function GetDressed() {
       {/* 3 — Location */}
       <div className="space-y-3">
         <p className="text-xs uppercase tracking-widest" style={{ color: '#9B8E84' }}>your location</p>
-
         {coords ? (
-          /* Location detected */
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 rounded-full px-3 py-1.5 border flex-1" style={{ borderColor: '#8B1A1A', backgroundColor: '#F0DADA' }}>
               <span className="text-sm">📍</span>
               <span className="text-xs" style={{ color: '#6B1010' }}>location detected</span>
             </div>
-            <button
-              onClick={() => setCoords(null)}
-              className="text-xs rounded-full px-3 py-1.5 border transition-all"
-              style={{ borderColor: '#E3D9CE', color: '#9B8E84' }}
-            >
+            <button onClick={() => setCoords(null)} className="text-xs rounded-full px-3 py-1.5 border transition-all" style={{ borderColor: '#E3D9CE', color: '#9B8E84' }}>
               change ×
             </button>
           </div>
         ) : (
-          /* City input + use location button */
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <button
@@ -334,8 +344,15 @@ export default function GetDressed() {
         style={{ backgroundColor: '#2D1A0E', color: '#FAF7F2' }}
       >
         {loading && <div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />}
-        {loading ? 'finding your look…' : isVibeMode ? 'style my outfit →' : 'dress me →'}
+        {loading ? 'finding your look…' : 'dress me →'}
       </button>
+
+      {/* Loading state */}
+      {loading && (
+        <div className="flex justify-center py-8">
+          <ClothesLoader label="styling your outfit…" />
+        </div>
+      )}
 
       {/* Error */}
       {error && (
@@ -344,38 +361,21 @@ export default function GetDressed() {
         </p>
       )}
 
-      {/* Results */}
+      {/* Result */}
       {!loading && result && (
         <div className="space-y-6">
           {result.weather && <WeatherStrip weather={result.weather} />}
-
-          {result.mode === 'vibe' ? (
-            <div className="space-y-4">
-              <p className="serif text-lg" style={{ color: '#2D1A0E' }}>
-                styled for <em>{occasion}</em> —
-              </p>
-              {hasOutfits ? (
-                <OutfitCard
-                  outfit={result.outfit}
-                  mood={mood}
-                  occasion={occasion}
-                  weather={result.weather}
-                />
-              ) : (
-                <EmptyOutfit />
-              )}
-            </div>
+          {hasOutfit ? (
+            <OutfitCard
+              outfit={result.outfit}
+              mood={mood}
+              occasion={occasion}
+              weather={result.weather}
+              onRefresh={handleRefresh}
+              refreshing={refreshing}
+            />
           ) : (
-            hasOutfits ? (
-              <div className="space-y-4">
-                <p className="serif text-lg" style={{ color: '#2D1A0E' }}>here's what i'd wear —</p>
-                {result.outfits.filter(o => o.items?.length > 0).map((outfit, i) => (
-                  <OutfitCard key={i} outfit={outfit} mood={mood} occasion={occasion} weather={result.weather} />
-                ))}
-              </div>
-            ) : (
-              <EmptyOutfit />
-            )
+            <EmptyOutfit />
           )}
         </div>
       )}

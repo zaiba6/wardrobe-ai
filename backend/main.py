@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from ai import analyze_inspo_image, detect_all_items, suggest_vibe_outfit, tag_clothing_image
+from ai import analyze_inspo_image, detect_all_items, suggest_personalized_outfit, suggest_vibe_outfit, tag_clothing_image
 from auth import (
     GOOGLE_AUTH_URL, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
     GOOGLE_INFO_URL, GOOGLE_TOKEN_URL, REDIRECT_URI, APP_URL,
@@ -255,10 +255,12 @@ class SaveDetectedBody(BaseModel):
 
 
 class OutfitSuggestBody(BaseModel):
-    mood: str
-    city: Optional[str]  = None
-    lat:  Optional[float] = None
-    lon:  Optional[float] = None
+    mood:        str
+    city:        Optional[str]   = None
+    lat:         Optional[float] = None
+    lon:         Optional[float] = None
+    occasion:    Optional[str]   = None
+    exclude_ids: list[int]       = []
 
 
 class VibeOutfitBody(BaseModel):
@@ -490,36 +492,43 @@ def delete_clothing(
 
 @app.post("/api/outfit/suggest")
 def suggest_outfit(body: OutfitSuggestBody, user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
-    mood    = body.mood
-    weather = _resolve_weather(body.city, body.lat, body.lon)
-    temp    = weather["temp_celsius"]
-
+    weather     = _resolve_weather(body.city, body.lat, body.lon)
     all_clothes = db.query(ClothingItem).filter(ClothingItem.user_id == user_id).all()
     if not all_clothes:
-        return {"weather": weather, "mood": mood, "outfits": [{"items": [], "reason": "Your wardrobe is empty! Upload some clothing items so I can suggest outfits for you."}]}
+        return {"weather": weather, "outfit": {"items": [], "reason": "Your wardrobe is empty — upload some clothing items first!"}}
 
-    pref_fits       = MOOD_FIT.get(mood, ["regular"])
-    pref_formality  = MOOD_FORMALITY.get(mood, ["casual"])
-    ok_seasons      = {"fall-winter", "all-season"} if temp < 10 else ({"fall-winter", "spring-summer", "all-season"} if temp <= 18 else {"spring-summer", "all-season"})
+    # Build inspo taste context from user's saved inspo board
+    inspo_items   = db.query(InspoItem).filter(InspoItem.user_id == user_id).all()
+    inspo_context = "; ".join(
+        it.style_notes for it in inspo_items if it.style_notes
+    )[:2000]  # cap to avoid huge prompts
 
-    def _matches(c): return c.fit in pref_fits and c.formality in pref_formality and c.season in ok_seasons
-    filtered = [c for c in all_clothes if _matches(c)]
+    wardrobe_summary = [
+        {"id": c.id, "type": c.type, "subtype": c.subtype, "color": c.color,
+         "description": c.description, "formality": c.formality, "fit": c.fit, "season": c.season}
+        for c in all_clothes
+    ]
 
-    def _of_type(pool, t): return [c for c in pool if c.type == t]
-    tops      = _of_type(filtered, "top")
-    bottoms   = _of_type(filtered, "bottom") + _of_type(filtered, "skirt")
-    dresses   = _of_type(filtered, "dress") + _of_type(filtered, "jumpsuit")
-    outerwear = _of_type(filtered, "outerwear") or (_of_type(all_clothes, "outerwear") if temp < 10 else [])
-    shoes     = _of_type(all_clothes, "shoes")
+    reason   = "Here's a look for you!"
+    selected = []
+    try:
+        item_ids, reason = suggest_personalized_outfit(
+            wardrobe_items=wardrobe_summary,
+            inspo_context=inspo_context,
+            mood=body.mood,
+            occasion=body.occasion,
+            weather=weather,
+            exclude_ids=body.exclude_ids,
+        )
+        id_order = {iid: idx for idx, iid in enumerate(item_ids)}
+        selected = sorted(
+            [c for c in all_clothes if c.id in set(item_ids)],
+            key=lambda c: id_order.get(c.id, 999),
+        )
+    except Exception:
+        pass
 
-    if not ((tops and bottoms) or dresses):
-        return {"weather": weather, "mood": mood, "outfits": [{"items": [], "reason": f"No perfect matches for '{mood}' mood and {temp}°C weather. Try uploading more items!"}]}
-
-    random.shuffle(tops); random.shuffle(bottoms); random.shuffle(dresses)
-    outfits = [o for i in range(3) if (o := _build_outfit(tops, bottoms, dresses, outerwear, shoes, mood, weather, i)) and o["items"]]
-    if not outfits:
-        outfits = [{"items": [], "reason": "Couldn't build a complete outfit right now. Try adding more tops, bottoms, or dresses!"}]
-    return {"weather": weather, "mood": mood, "outfits": outfits}
+    return {"weather": weather, "outfit": {"items": [serialize_clothing(c) for c in selected], "reason": reason}}
 
 
 # ---------------------------------------------------------------------------

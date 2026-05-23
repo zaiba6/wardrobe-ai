@@ -223,6 +223,75 @@ def analyze_inspo_image(image_path: str) -> dict:
         raise RuntimeError(f"AI inspo analysis failed: {exc}") from exc
 
 
+def suggest_personalized_outfit(
+    wardrobe_items: list[dict],
+    inspo_context: str,
+    mood: str,
+    occasion: str | None,
+    weather: dict,
+    exclude_ids: list[int] | None = None,
+) -> tuple[list[int], str]:
+    """Pick one outfit using Claude, informed by the user's inspo aesthetic and mood."""
+    if not wardrobe_items:
+        return [], "Your wardrobe is empty — upload some pieces first!"
+
+    client = _get_client()
+    excluded = set(exclude_ids or [])
+    available = [item for item in wardrobe_items if item["id"] not in excluded] or wardrobe_items
+
+    wardrobe_text = "\n".join(
+        f"ID {item['id']}: {item['color']} {item.get('subtype') or item['type']} "
+        f"({item['formality']}, {item['fit']}, {item['season']}) — {item['description']}"
+        for item in available
+    )
+
+    temp_c    = weather["temp_celsius"]
+    temp_f    = weather["temp_fahrenheit"]
+    condition = weather["description"]
+
+    inspo_line   = f"User's personal style from their inspo board:\n{inspo_context}\n\n" if inspo_context else ""
+    occasion_line = f"Occasion: {occasion}.\n" if occasion else ""
+
+    prompt = (
+        "You are a personal stylist who knows this user's taste.\n\n"
+        f"{inspo_line}"
+        f"How they're feeling today: {mood}.\n"
+        f"{occasion_line}"
+        f"Current weather: {temp_c}°C ({temp_f}°F), {condition}.\n\n"
+        "Styling rules:\n"
+        "- Match the inspo aesthetic as closely as possible using what they own.\n"
+        "- Take the mood literally: 'bloated', 'uncomfortable', 'tired' → loose, oversized, flowy fits. "
+        "'Confident', 'sexy', 'powerful' → fitted, bodycon. 'Cozy', 'comfy' → soft, relaxed.\n"
+        "- Weather: below 15°C → include outerwear. 15–20°C → skip outerwear but tell them to bring a light layer for later in the reason. Above 20°C → no outerwear.\n"
+        "- Always include top + bottom OR dress/jumpsuit. Add shoes if available. Add an accessory if it completes the look.\n"
+        "- Do NOT repeat any item IDs from a previous outfit the user already saw.\n\n"
+        f"Wardrobe (only pick from these):\n{wardrobe_text}\n\n"
+        "Return JSON with:\n"
+        '- "item_ids": array of integer IDs\n'
+        '- "reason": 1–2 warm, friendly sentences — why this matches their vibe and mood. '
+        "If 15–20°C, add a note to bring a light layer for the evening.\n"
+        "Return ONLY valid JSON. No markdown."
+    )
+
+    message = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=300,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    raw = message.content[0].text.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
+
+    result    = json.loads(raw)
+    item_ids  = [int(i) for i in result.get("item_ids", [])]
+    reason    = result.get("reason", "Here's a look for you!")
+    return item_ids, reason
+
+
 def suggest_vibe_outfit(
     wardrobe_items: list[dict],
     vibe: str,
