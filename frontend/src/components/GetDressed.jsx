@@ -27,6 +27,14 @@ const MOODS = [
   { key: 'Put-together', label: 'put-together',  sub: 'polished look',     emoji: '✨' },
 ]
 
+const PRESET_OCCASIONS = [
+  { label: 'work',       value: 'office look, business casual, polished — no jeans, no sneakers' },
+  { label: 'date night', value: 'date night, romantic and elegant, slightly dressed up' },
+  { label: 'going out',  value: 'night out, going out, fun and confident, statement look' },
+  { label: 'weekend',    value: 'casual weekend, comfy but cute, running errands' },
+  { label: 'gym',        value: 'gym day, athletic, sporty and functional' },
+]
+
 function weatherEmoji(condition) {
   if (!condition) return '🌤️'
   const c = condition.toLowerCase()
@@ -121,17 +129,19 @@ function OutfitCard({ outfit, mood, occasion, weather }) {
 
 export default function GetDressed() {
   const [occasion, setOccasion] = useState('')
-  const [mood, setMood]         = useState(null)
+  const [moodKey, setMoodKey]   = useState(null)
+  const [moodText, setMoodText] = useState('')
   const [city, setCity]         = useState('')
-  const [coords, setCoords]     = useState(null)   // { lat, lon } from browser
+  const [coords, setCoords]     = useState(null)
   const [locating, setLocating] = useState(false)
   const [result, setResult]     = useState(null)
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
 
-  const isVibeMode   = occasion.trim().length > 0
-  const hasLocation  = coords !== null || city.trim().length > 0
-  const canSubmit    = mood && hasLocation && !loading
+  const mood       = moodText.trim() || moodKey
+  const isVibeMode = occasion.trim().length > 0
+  const hasLocation = coords !== null || city.trim().length > 0
+  const canSubmit   = mood && hasLocation && !loading
 
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
@@ -199,16 +209,32 @@ export default function GetDressed() {
       </div>
 
       {/* 1 — Occasion */}
-      <div className="space-y-2">
+      <div className="space-y-3">
         <p className="text-xs uppercase tracking-widest" style={{ color: '#9B8E84' }}>
           occasion <span style={{ color: '#C4B5AC', textTransform: 'none', letterSpacing: 'normal' }}>— optional</span>
         </p>
+        {/* Quick-fill chips */}
+        <div className="flex gap-2 flex-wrap">
+          {PRESET_OCCASIONS.map(p => (
+            <button
+              key={p.label}
+              onClick={() => setOccasion(occasion === p.value ? '' : p.value)}
+              className="text-xs rounded-full px-3 py-1.5 border transition-all"
+              style={occasion === p.value
+                ? { backgroundColor: '#F0DADA', borderColor: '#8B1A1A', color: '#6B1010' }
+                : { backgroundColor: '#fff', borderColor: '#E3D9CE', color: '#9B8E84' }
+              }
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
         <input
           type="text"
           value={occasion}
           onChange={e => setOccasion(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-          placeholder="office meeting, dinner date, beach day…"
+          placeholder="or describe the vibe… beach day, baby shower, etc."
           className="w-full border-b-2 bg-transparent pb-2 text-sm focus:outline-none transition-all"
           style={{ borderColor: occasion ? '#8B1A1A' : '#E3D9CE', color: '#2D1A0E' }}
         />
@@ -226,19 +252,28 @@ export default function GetDressed() {
           {MOODS.map(m => (
             <button
               key={m.key}
-              onClick={() => setMood(m.key)}
+              onClick={() => { setMoodKey(moodKey === m.key ? null : m.key); setMoodText('') }}
               className="flex flex-col items-center gap-1.5 rounded-2xl border px-4 py-3.5 w-[5.5rem] transition-all duration-200 text-center"
-              style={mood === m.key
+              style={moodKey === m.key && !moodText
                 ? { backgroundColor: '#F0DADA', borderColor: '#8B1A1A', color: '#6B1010' }
                 : { backgroundColor: '#fff', borderColor: '#E3D9CE', color: '#9B8E84' }
               }
             >
               <span className="text-xl">{m.emoji}</span>
               <span className="text-xs font-medium leading-tight">{m.label}</span>
-              <span className="text-[10px] leading-tight" style={{ color: mood === m.key ? '#8B1A1A' : '#C4B5AC' }}>{m.sub}</span>
+              <span className="text-[10px] leading-tight" style={{ color: moodKey === m.key && !moodText ? '#8B1A1A' : '#C4B5AC' }}>{m.sub}</span>
             </button>
           ))}
         </div>
+        <input
+          type="text"
+          value={moodText}
+          onChange={e => { setMoodText(e.target.value); setMoodKey(null) }}
+          onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+          placeholder="or describe how you feel… super bloated, super confident, chaotic…"
+          className="w-full border-b-2 bg-transparent pb-2 text-sm focus:outline-none transition-all"
+          style={{ borderColor: moodText ? '#8B1A1A' : '#E3D9CE', color: '#2D1A0E' }}
+        />
       </div>
 
       {/* 3 — Location */}

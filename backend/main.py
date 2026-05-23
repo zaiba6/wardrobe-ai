@@ -282,6 +282,14 @@ class SaveFromUrlBody(BaseModel):
     image_url: str
 
 
+class InspoOutfitBody(BaseModel):
+    inspo_ids: list[int]
+    city:      Optional[str]   = None
+    lat:       Optional[float] = None
+    lon:       Optional[float] = None
+    mood:      Optional[str]   = None
+
+
 # ===========================================================================
 # Routes
 # ===========================================================================
@@ -530,6 +538,43 @@ def suggest_vibe_outfit_endpoint(body: VibeOutfitBody, user_id: int = Depends(ge
     selected = []
     try:
         item_ids, reason = suggest_vibe_outfit(wardrobe_summary, body.vibe, weather, body.mood)
+        id_order = {iid: idx for idx, iid in enumerate(item_ids)}
+        selected = sorted([c for c in all_clothes if c.id in set(item_ids)], key=lambda c: id_order.get(c.id, 999))
+    except Exception:
+        pass
+    return {"weather": weather, "outfit": {"items": [serialize_clothing(i) for i in selected], "reason": reason}}
+
+
+# ---------------------------------------------------------------------------
+# Outfit from inspo selection
+# ---------------------------------------------------------------------------
+
+@app.post("/api/outfit/from-inspo")
+def outfit_from_inspo(body: InspoOutfitBody, user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    weather     = _resolve_weather(body.city, body.lat, body.lon)
+    all_clothes = db.query(ClothingItem).filter(ClothingItem.user_id == user_id).all()
+    if not all_clothes:
+        return {"weather": weather, "outfit": {"items": [], "reason": "Your wardrobe is empty! Upload some clothing items first."}}
+
+    inspo_items = db.query(InspoItem).filter(InspoItem.id.in_(body.inspo_ids[:10])).all()
+
+    # Build a vibe description from style notes and detected item types
+    vibe_parts = []
+    for it in inspo_items:
+        if it.style_notes:
+            vibe_parts.append(it.style_notes)
+        for d in json.loads(it.items_detected or "[]"):
+            t = d.get("type", "").strip()
+            c = d.get("color", "").strip()
+            if t:
+                vibe_parts.append(f"{c} {t}".strip() if c else t)
+    vibe = "; ".join(vibe_parts) if vibe_parts else "stylish, curated look"
+
+    wardrobe_summary = [{"id": c.id, "type": c.type, "subtype": c.subtype, "color": c.color, "description": c.description, "formality": c.formality, "fit": c.fit, "season": c.season} for c in all_clothes]
+    reason = "Here's a look inspired by your saved vibes!"
+    selected = []
+    try:
+        item_ids, reason = suggest_vibe_outfit(wardrobe_summary, vibe, weather, body.mood)
         id_order = {iid: idx for idx, iid in enumerate(item_ids)}
         selected = sorted([c for c in all_clothes if c.id in set(item_ids)], key=lambda c: id_order.get(c.id, 999))
     except Exception:

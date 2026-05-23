@@ -9,9 +9,9 @@ import OutfitsWorn from './components/OutfitsWorn'
 
 const TABS = [
   { key: 'closet', label: 'the floordrobe' },
+  { key: 'inspo',  label: 'inspo board' },
   { key: 'today',  label: "today's look" },
   { key: 'worn',   label: 'outfits worn' },
-  { key: 'inspo',  label: 'inspo board' },
 ]
 
 function AppShell() {

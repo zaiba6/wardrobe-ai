@@ -343,6 +343,18 @@ export default function Wardrobe() {
         <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={e => { handleUpload(e.target.files); e.target.value = '' }} />
       </div>
 
+      {/* Onboarding hint — shown until user has 10+ photos */}
+      {photos.length < 10 && (
+        <div className="rounded-xl border px-4 py-3 flex items-start gap-3" style={{ backgroundColor: '#FFF8F0', borderColor: '#E3D9CE' }}>
+          <span className="text-lg leading-none mt-0.5">🪞</span>
+          <div className="flex-1">
+            <p className="text-sm font-medium" style={{ color: '#2D1A0E' }}>aim for 10 photos to start</p>
+            <p className="text-xs mt-0.5" style={{ color: '#9B8E84' }}>mirror selfies work great — we'll detect every piece in the photo automatically</p>
+          </div>
+          <span className="text-xs tabular-nums shrink-0 mt-0.5" style={{ color: '#C4B5AC' }}>{photos.length}/10</span>
+        </div>
+      )}
+
       {/* Upload drop zone */}
       <div
         className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all duration-200 ${dragOver ? 'border-[#8B1A1A] bg-[#F0DADA]/30' : 'border-[#E3D9CE] hover:border-[#8B1A1A]/40'}`}

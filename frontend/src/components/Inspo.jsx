@@ -4,17 +4,37 @@ import ClothesLoader from './ClothesLoader'
 
 const API = import.meta.env.VITE_API_URL ?? ''
 
-function InspoCard({ item, onDelete }) {
+function InspoCard({ item, selected, onToggle, onDelete }) {
   const [hovered, setHovered] = useState(false)
   const detectedText = item.items_detected?.map(d => d.type).join(' · ')
 
   return (
     <div
-      className="relative rounded-xl overflow-hidden border transition-all duration-200"
-      style={{ backgroundColor: '#fff', borderColor: '#E3D9CE' }}
+      className="relative rounded-xl overflow-hidden border transition-all duration-200 cursor-pointer"
+      style={{
+        backgroundColor: '#fff',
+        borderColor: selected ? '#8B1A1A' : '#E3D9CE',
+        boxShadow: selected ? '0 0 0 2px #8B1A1A' : 'none',
+      }}
+      onClick={() => onToggle(item.id)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
+      {/* Selection indicator */}
+      <div
+        className="absolute top-2 left-2 z-10 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all"
+        style={{
+          backgroundColor: selected ? '#8B1A1A' : 'rgba(250,247,242,0.85)',
+          borderColor: selected ? '#8B1A1A' : '#E3D9CE',
+        }}
+      >
+        {selected && (
+          <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        )}
+      </div>
+
       <div className="aspect-square relative overflow-hidden" style={{ backgroundColor: '#F0EAE2' }}>
         <img src={`${API}${item.image_url}`} alt="inspo" className="w-full h-full object-cover" />
         {hovered && item.items_detected?.length > 0 && (
@@ -24,7 +44,7 @@ function InspoCard({ item, onDelete }) {
         )}
         {hovered && (
           <button
-            onClick={() => onDelete(item.id)}
+            onClick={e => { e.stopPropagation(); onDelete(item.id) }}
             className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center"
             style={{ backgroundColor: 'rgba(250,247,242,0.9)', color: '#9B8E84' }}
           >
@@ -60,6 +80,30 @@ function RecCard({ rec }) {
   )
 }
 
+function OutfitItemTile({ item }) {
+  return (
+    <div className="flex flex-col items-center gap-1.5 w-20">
+      <div className="w-20 h-20 rounded-xl overflow-hidden" style={{ backgroundColor: '#F0EAE2' }}>
+        <img src={`${API}${item.image_url}`} alt={item.type} className="w-full h-full object-cover" />
+      </div>
+      <p className="text-xs text-center capitalize leading-tight" style={{ color: '#4A3020' }}>
+        {item.subtype || item.type}
+      </p>
+    </div>
+  )
+}
+
+function weatherEmoji(condition) {
+  if (!condition) return '🌤️'
+  const c = condition.toLowerCase()
+  if (c.includes('snow')) return '❄️'
+  if (c.includes('rain') || c.includes('drizzle')) return '🌧️'
+  if (c.includes('thunder')) return '⛈️'
+  if (c.includes('cloud')) return '☁️'
+  if (c.includes('clear') || c.includes('sun')) return '☀️'
+  return '🌤️'
+}
+
 export default function Inspo() {
   const [inspoItems, setInspoItems] = useState([])
   const [recommendations, setRecommendations] = useState([])
@@ -68,6 +112,19 @@ export default function Inspo() {
   const [loadingRecs, setLoadingRecs] = useState(true)
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef(null)
+
+  // Selection state
+  const [selectedIds, setSelectedIds] = useState(new Set())
+
+  // Get-a-look panel state
+  const [showLookPanel, setShowLookPanel] = useState(false)
+  const [city, setCity] = useState('')
+  const [coords, setCoords] = useState(null)
+  const [locating, setLocating] = useState(false)
+  const [lookLoading, setLookLoading] = useState(false)
+  const [lookResult, setLookResult] = useState(null)
+  const [lookError, setLookError] = useState('')
+  const [lookSaved, setLookSaved] = useState(false)
 
   const fetchInspo = async () => {
     setLoadingInspo(true)
@@ -97,7 +154,7 @@ export default function Inspo() {
         const res = await axios.post(`${API}/api/inspo/upload`, fd)
         setInspoItems(p => [res.data, ...p])
       } catch {
-        // continue with remaining
+        // continue
       }
     }
     fetchRecs()
@@ -108,8 +165,67 @@ export default function Inspo() {
   const handleDelete = async (id) => {
     await axios.delete(`${API}/api/inspo/${id}`)
     setInspoItems(p => p.filter(i => i.id !== id))
+    setSelectedIds(prev => { const next = new Set(prev); next.delete(id); return next })
     fetchRecs()
   }
+
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else if (next.size < 10) {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) { setLookError('Geolocation not supported — type your city.'); return }
+    setLocating(true)
+    setLookError('')
+    navigator.geolocation.getCurrentPosition(
+      pos => { setCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude }); setCity(''); setLocating(false) },
+      () => { setLocating(false); setLookError('Could not get location — type your city.') }
+    )
+  }
+
+  const handleGetLook = async () => {
+    if (!city.trim() && !coords) { setLookError('add your location first'); return }
+    setLookLoading(true)
+    setLookError('')
+    setLookResult(null)
+    setLookSaved(false)
+    try {
+      const locationPayload = coords ? { lat: coords.lat, lon: coords.lon } : { city: city.trim() }
+      const res = await axios.post(`${API}/api/outfit/from-inspo`, {
+        inspo_ids: Array.from(selectedIds),
+        ...locationPayload,
+      })
+      setLookResult(res.data)
+    } catch (err) {
+      setLookError(err.response?.data?.detail || 'something went wrong — try again')
+    } finally {
+      setLookLoading(false)
+    }
+  }
+
+  const handleSaveLook = async () => {
+    if (!lookResult) return
+    try {
+      await axios.post(`${API}/api/outfits/log`, {
+        items: lookResult.outfit.items,
+        occasion: 'inspo board look',
+        weather_city: lookResult.weather?.city ?? null,
+        weather_temp_c: lookResult.weather?.temp_celsius ?? null,
+        weather_condition: lookResult.weather?.condition ?? null,
+      })
+      setLookSaved(true)
+    } catch { /* silent */ }
+  }
+
+  const clearSelection = () => { setSelectedIds(new Set()); setShowLookPanel(false); setLookResult(null) }
 
   return (
     <div className="space-y-10">
@@ -117,7 +233,7 @@ export default function Inspo() {
       <div>
         <h2 className="serif-italic text-3xl leading-snug" style={{ color: '#2D1A0E' }}>the inspo board</h2>
         <p className="text-sm mt-1" style={{ color: '#9B8E84' }}>
-          save what inspires you — we'll figure out what's missing from your closet
+          save what inspires you — select up to 10 to get a look for today
         </p>
       </div>
 
@@ -142,6 +258,116 @@ export default function Inspo() {
           </div>
         )}
       </div>
+
+      {/* Get-a-look panel (shown when items selected) */}
+      {selectedIds.size > 0 && (
+        <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: '#fff', borderColor: '#8B1A1A' }}>
+          {/* Header bar */}
+          <div className="flex items-center justify-between px-5 py-3.5" style={{ backgroundColor: '#F0DADA' }}>
+            <p className="text-sm font-medium" style={{ color: '#6B1010' }}>
+              {selectedIds.size} {selectedIds.size === 1 ? 'vibe' : 'vibes'} selected
+              <span className="font-normal" style={{ color: '#9B6060' }}> · {10 - selectedIds.size} more</span>
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowLookPanel(p => !p)}
+                className="text-xs rounded-full px-4 py-1.5 font-medium transition-all"
+                style={{ backgroundColor: '#8B1A1A', color: '#fff' }}
+              >
+                {showLookPanel ? 'hide' : 'get today\'s look →'}
+              </button>
+              <button onClick={clearSelection} className="text-xs" style={{ color: '#9B6060' }}>clear</button>
+            </div>
+          </div>
+
+          {/* Expandable panel */}
+          {showLookPanel && (
+            <div className="p-5 space-y-4">
+              {/* Location */}
+              <div className="space-y-2">
+                <p className="text-xs uppercase tracking-widest" style={{ color: '#9B8E84' }}>your location</p>
+                {coords ? (
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 rounded-full px-3 py-1.5 border flex-1" style={{ borderColor: '#8B1A1A', backgroundColor: '#F0DADA' }}>
+                      <span className="text-sm">📍</span>
+                      <span className="text-xs" style={{ color: '#6B1010' }}>location detected</span>
+                    </div>
+                    <button onClick={() => setCoords(null)} className="text-xs rounded-full px-3 py-1.5 border" style={{ borderColor: '#E3D9CE', color: '#9B8E84' }}>change ×</button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleGetLocation}
+                        disabled={locating}
+                        className="flex items-center gap-1.5 rounded-full px-3 py-1.5 border text-xs transition-all disabled:opacity-60 shrink-0"
+                        style={{ borderColor: '#E3D9CE', color: '#9B8E84', backgroundColor: '#fff' }}
+                      >
+                        {locating ? <span className="w-3 h-3 rounded-full border border-[#E3D9CE] border-t-[#8B1A1A] animate-spin inline-block" /> : '📍'}
+                        {locating ? 'locating…' : 'use my location'}
+                      </button>
+                      <span className="text-xs" style={{ color: '#C4B5AC' }}>or</span>
+                    </div>
+                    <input
+                      type="text"
+                      value={city}
+                      onChange={e => setCity(e.target.value)}
+                      placeholder="type your city…"
+                      className="w-full border-b-2 bg-transparent pb-2 text-sm focus:outline-none transition-all"
+                      style={{ borderColor: city ? '#8B1A1A' : '#E3D9CE', color: '#2D1A0E' }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={handleGetLook}
+                disabled={lookLoading || (!city.trim() && !coords)}
+                className="flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-medium transition-all disabled:opacity-40"
+                style={{ backgroundColor: '#2D1A0E', color: '#FAF7F2' }}
+              >
+                {lookLoading && <div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />}
+                {lookLoading ? 'styling from your vibes…' : 'style me →'}
+              </button>
+
+              {lookError && (
+                <p className="text-sm rounded-xl px-4 py-3 border" style={{ color: '#6B1010', backgroundColor: '#F0DADA', borderColor: '#E8CECE' }}>
+                  {lookError}
+                </p>
+              )}
+
+              {/* Result */}
+              {lookResult && !lookLoading && (
+                <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: '#E3D9CE' }}>
+                  {lookResult.weather && (
+                    <div className="flex items-center gap-3 text-xs" style={{ color: '#9B8E84' }}>
+                      <span>{weatherEmoji(lookResult.weather.condition)}</span>
+                      <span>{lookResult.weather.city} · {Math.round(lookResult.weather.temp_fahrenheit)}°F</span>
+                    </div>
+                  )}
+                  {lookResult.outfit?.reason && (
+                    <p className="text-xs italic" style={{ color: '#9B8E84' }}>{lookResult.outfit.reason}</p>
+                  )}
+                  <div className="flex gap-3 flex-wrap">
+                    {lookResult.outfit?.items?.map((item, i) => <OutfitItemTile key={item.id ?? i} item={item} />)}
+                  </div>
+                  <button
+                    onClick={handleSaveLook}
+                    disabled={lookSaved}
+                    className="text-xs rounded-full px-4 py-1.5 border transition-all disabled:opacity-60"
+                    style={lookSaved
+                      ? { borderColor: '#7A9E7A', color: '#7A9E7A', backgroundColor: '#F0F7F0' }
+                      : { borderColor: '#E3D9CE', color: '#9B8E84' }
+                    }
+                  >
+                    {lookSaved ? 'saved to outfits worn ✓' : 'save this look ✦'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Capsule recommendations */}
       {!loadingRecs && recommendations.length > 0 && (
@@ -178,7 +404,15 @@ export default function Inspo() {
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {inspoItems.map(item => <InspoCard key={item.id} item={item} onDelete={handleDelete} />)}
+            {inspoItems.map(item => (
+              <InspoCard
+                key={item.id}
+                item={item}
+                selected={selectedIds.has(item.id)}
+                onToggle={toggleSelect}
+                onDelete={handleDelete}
+              />
+            ))}
           </div>
         )}
       </div>
