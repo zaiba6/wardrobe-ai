@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import axios from 'axios'
+import ClothesLoader from './ClothesLoader'
 
 const API = import.meta.env.VITE_API_URL ?? ''
 
@@ -20,7 +21,7 @@ const SUBTYPES = {
 }
 
 function Spinner() {
-  return <div className="w-4 h-4 rounded-full border-2 border-[#E3D9CE] border-t-[#B5756A] animate-spin" />
+  return <div className="w-4 h-4 rounded-full border-2 border-[#E3D9CE] border-t-[#8B1A1A] animate-spin" />
 }
 
 function EditModal({ item, onSave, onClose }) {
@@ -53,8 +54,8 @@ function EditModal({ item, onSave, onClose }) {
         <select
           value={form[key]}
           onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))}
-          className="w-full border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[#B5756A]"
-          style={{ borderColor: '#E3D9CE', color: '#1C1917' }}
+          className="w-full border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[#8B1A1A]"
+          style={{ borderColor: '#E3D9CE', color: '#2D1A0E' }}
         >
           <option value="">—</option>
           {options.map(o => <option key={o} value={o}>{o}</option>)}
@@ -64,15 +65,15 @@ function EditModal({ item, onSave, onClose }) {
           type={type}
           value={form[key]}
           onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))}
-          className="w-full border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[#B5756A]"
-          style={{ borderColor: '#E3D9CE', color: '#1C1917' }}
+          className="w-full border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[#8B1A1A]"
+          style={{ borderColor: '#E3D9CE', color: '#2D1A0E' }}
         />
       )}
     </div>
   )
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" style={{ backgroundColor: 'rgba(28,25,23,0.5)' }} onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" style={{ backgroundColor: 'rgba(45,26,14,0.5)' }} onClick={onClose}>
       <div
         className="w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl overflow-hidden max-h-[90vh] overflow-y-auto"
         style={{ backgroundColor: '#FAF7F2' }}
@@ -82,7 +83,7 @@ function EditModal({ item, onSave, onClose }) {
           <img src={`${API}${item.image_url}`} alt="" className="w-full h-full object-cover" />
         </div>
         <div className="p-6 space-y-4">
-          <h3 className="serif text-lg" style={{ color: '#1C1917' }}>Edit piece</h3>
+          <h3 className="serif text-lg" style={{ color: '#2D1A0E' }}>Edit piece</h3>
           <div className="grid grid-cols-2 gap-3">
             {field('Type', 'type', 'text', TYPE_OPTIONS)}
             <div>
@@ -90,8 +91,8 @@ function EditModal({ item, onSave, onClose }) {
               <select
                 value={form.subtype}
                 onChange={e => { setForm(p => ({ ...p, subtype: e.target.value })) }}
-                className="w-full border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[#B5756A]"
-                style={{ borderColor: '#E3D9CE', color: '#1C1917' }}
+                className="w-full border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[#8B1A1A]"
+                style={{ borderColor: '#E3D9CE', color: '#2D1A0E' }}
               >
                 <option value="">—</option>
                 {(SUBTYPES[form.type] || []).map(o => <option key={o} value={o}>{o}</option>)}
@@ -110,8 +111,8 @@ function EditModal({ item, onSave, onClose }) {
               onChange={e => setForm(p => ({ ...p, user_notes: e.target.value }))}
               rows={2}
               placeholder="anything to remember about this piece..."
-              className="w-full border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[#B5756A] resize-none"
-              style={{ borderColor: '#E3D9CE', color: '#1C1917' }}
+              className="w-full border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[#8B1A1A] resize-none"
+              style={{ borderColor: '#E3D9CE', color: '#2D1A0E' }}
             />
           </div>
           <div className="flex gap-3 pt-1">
@@ -119,7 +120,7 @@ function EditModal({ item, onSave, onClose }) {
               onClick={handleSave}
               disabled={saving}
               className="flex-1 flex items-center justify-center gap-2 rounded-full py-2.5 text-sm font-medium transition-all"
-              style={{ backgroundColor: '#B5756A', color: '#fff' }}
+              style={{ backgroundColor: '#8B1A1A', color: '#fff' }}
             >
               {saving && <Spinner />}
               {saving ? 'Saving…' : 'Save'}
@@ -155,7 +156,7 @@ function PhotoCard({ photo, onEditItem, onDeleteItem }) {
             {/* subtype/type pill */}
             <span
               className="text-xs px-2 py-0.5 rounded-full flex-1 min-w-0 truncate capitalize"
-              style={{ backgroundColor: '#EED9D5', color: '#8B4A42' }}
+              style={{ backgroundColor: '#F0DADA', color: '#6B1010' }}
             >
               {item.subtype || item.type}
             </span>
@@ -168,7 +169,7 @@ function PhotoCard({ photo, onEditItem, onDeleteItem }) {
             {/* edit — always visible */}
             <button
               onClick={() => onEditItem(item)}
-              className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center transition-colors hover:text-[#B5756A]"
+              className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center transition-colors hover:text-[#8B1A1A]"
               style={{ color: '#C4B5AC' }}
               title="Edit tags"
             >
@@ -179,7 +180,7 @@ function PhotoCard({ photo, onEditItem, onDeleteItem }) {
             {/* delete — appears on row hover */}
             <button
               onClick={() => onDeleteItem(item.id)}
-              className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity hover:text-[#C47A70]"
+              className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity hover:text-[#8B1A1A]"
               style={{ color: '#C4B5AC' }}
               title="Remove"
             >
@@ -321,7 +322,7 @@ export default function Wardrobe() {
       {/* Header */}
       <div className="flex items-end justify-between">
         <div>
-          <h2 className="serif text-2xl" style={{ color: '#1C1917' }}>the floordrobe</h2>
+          <h2 className="serif text-2xl" style={{ color: '#2D1A0E' }}>the floordrobe</h2>
           <p className="text-sm mt-0.5" style={{ color: '#9B8E84' }}>
             {photos.length} {photos.length === 1 ? 'photo' : 'photos'} · {clothes.length} {clothes.length === 1 ? 'piece' : 'pieces'}
           </p>
@@ -330,7 +331,7 @@ export default function Wardrobe() {
           onClick={() => !uploading && fileInputRef.current?.click()}
           disabled={uploading}
           className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all disabled:opacity-60"
-          style={{ backgroundColor: '#1C1917', color: '#FAF7F2' }}
+          style={{ backgroundColor: '#2D1A0E', color: '#FAF7F2' }}
         >
           {uploading ? <Spinner /> : (
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -344,7 +345,7 @@ export default function Wardrobe() {
 
       {/* Upload drop zone */}
       <div
-        className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all duration-200 ${dragOver ? 'border-[#B5756A] bg-[#EED9D5]/30' : 'border-[#E3D9CE] hover:border-[#B5756A]/40'}`}
+        className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all duration-200 ${dragOver ? 'border-[#8B1A1A] bg-[#F0DADA]/30' : 'border-[#E3D9CE] hover:border-[#8B1A1A]/40'}`}
         onClick={() => !uploading && fileInputRef.current?.click()}
         onDragOver={e => { e.preventDefault(); setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
@@ -352,8 +353,8 @@ export default function Wardrobe() {
       >
         {uploading ? (
           <div className="flex flex-col items-center gap-3">
-            <div className="w-8 h-8 rounded-full border-2 border-[#E3D9CE] border-t-[#B5756A] animate-spin" />
-            <p className="text-sm" style={{ color: '#B5756A' }}>{uploadStatus}</p>
+            <ClothesLoader />
+            <p className="text-sm" style={{ color: '#8B1A1A' }}>{uploadStatus}</p>
           </div>
         ) : (
           <div className="space-y-1">
@@ -371,8 +372,8 @@ export default function Wardrobe() {
             const f = { ...filters, type: e.target.value, subtype: '' }
             setFilters(f); fetchClothes(f)
           }}
-          className="text-xs border rounded-full px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#B5756A] cursor-pointer"
-          style={{ borderColor: '#E3D9CE', backgroundColor: '#fff', color: '#6B5E57' }}
+          className="text-xs border rounded-full px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#8B1A1A] cursor-pointer"
+          style={{ borderColor: '#E3D9CE', backgroundColor: '#fff', color: '#4A3020' }}
         >
           <option value="">all types</option>
           {TYPE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
@@ -382,8 +383,8 @@ export default function Wardrobe() {
           <select
             value={filters.subtype}
             onChange={e => handleFilterChange('subtype', e.target.value)}
-            className="text-xs border rounded-full px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#B5756A] cursor-pointer"
-            style={{ borderColor: '#B5756A', backgroundColor: '#EED9D5', color: '#8B4A42' }}
+            className="text-xs border rounded-full px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#8B1A1A] cursor-pointer"
+            style={{ borderColor: '#8B1A1A', backgroundColor: '#F0DADA', color: '#6B1010' }}
           >
             <option value="">all {filters.type}s</option>
             {SUBTYPES[filters.type].map(o => <option key={o} value={o}>{o}</option>)}
@@ -399,8 +400,8 @@ export default function Wardrobe() {
             key={field}
             value={filters[field]}
             onChange={e => handleFilterChange(field, e.target.value)}
-            className="text-xs border rounded-full px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#B5756A] cursor-pointer"
-            style={{ borderColor: '#E3D9CE', backgroundColor: '#fff', color: '#6B5E57' }}
+            className="text-xs border rounded-full px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#8B1A1A] cursor-pointer"
+            style={{ borderColor: '#E3D9CE', backgroundColor: '#fff', color: '#4A3020' }}
           >
             <option value="">all {label}s</option>
             {options.map(o => <option key={o} value={o}>{o}</option>)}
@@ -411,7 +412,7 @@ export default function Wardrobe() {
           <button
             onClick={() => { const f = { type: '', subtype: '', fit: '', formality: '', season: '' }; setFilters(f); fetchClothes(f) }}
             className="text-xs rounded-full px-3 py-1.5 transition-all"
-            style={{ color: '#B5756A' }}
+            style={{ color: '#8B1A1A' }}
           >
             clear ×
           </button>
@@ -420,8 +421,8 @@ export default function Wardrobe() {
 
       {/* Grid */}
       {loading ? (
-        <div className="flex justify-center py-20">
-          <div className="w-6 h-6 rounded-full border-2 border-[#E3D9CE] border-t-[#B5756A] animate-spin" />
+        <div className="flex justify-center py-16">
+          <ClothesLoader label="loading your floordrobe…" />
         </div>
       ) : photos.length === 0 ? (
         <div className="text-center py-24 space-y-2">
@@ -454,7 +455,7 @@ export default function Wardrobe() {
 
       {/* Multi-item detection sheet */}
       {detected && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" style={{ backgroundColor: 'rgba(28,25,23,0.5)' }} onClick={() => _advanceQueue(detectedQueue)}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" style={{ backgroundColor: 'rgba(45,26,14,0.5)' }} onClick={() => _advanceQueue(detectedQueue)}>
           <div
             className="w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl max-h-[85vh] overflow-y-auto"
             style={{ backgroundColor: '#FAF7F2' }}
@@ -462,7 +463,7 @@ export default function Wardrobe() {
           >
             <div className="h-44 overflow-hidden rounded-t-3xl sm:rounded-t-2xl relative" style={{ backgroundColor: '#E3D9CE' }}>
               <img src={`${API}${detected.image_url}`} alt="" className="w-full h-full object-cover object-top" />
-              <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(28,25,23,0.4), transparent)' }} />
+              <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(45,26,14,0.4), transparent)' }} />
               <div className="absolute bottom-3 left-5 right-5 flex items-end justify-between">
                 <p className="text-white text-sm font-medium">
                   we spotted {detected.items.length} pieces —
@@ -492,12 +493,12 @@ export default function Wardrobe() {
                       }))}
                       className="w-full flex items-start gap-3 rounded-xl p-3 border text-left transition-all"
                       style={{
-                        backgroundColor: checked ? '#EED9D5' : '#fff',
-                        borderColor: checked ? '#B5756A' : '#E3D9CE',
+                        backgroundColor: checked ? '#F0DADA' : '#fff',
+                        borderColor: checked ? '#8B1A1A' : '#E3D9CE',
                       }}
                     >
                       <div className="mt-0.5 w-4 h-4 rounded flex items-center justify-center shrink-0 border transition-all"
-                        style={{ backgroundColor: checked ? '#B5756A' : '#fff', borderColor: checked ? '#B5756A' : '#E3D9CE' }}>
+                        style={{ backgroundColor: checked ? '#8B1A1A' : '#fff', borderColor: checked ? '#8B1A1A' : '#E3D9CE' }}>
                         {checked && (
                           <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -506,7 +507,7 @@ export default function Wardrobe() {
                       </div>
                       <div className="flex-1 space-y-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-medium capitalize" style={{ color: '#1C1917' }}>{item.description || item.type}</p>
+                          <p className="text-sm font-medium capitalize" style={{ color: '#2D1A0E' }}>{item.description || item.type}</p>
                           {item._dup && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#FEF3C7', color: '#92400E' }}>
                               already in closet
@@ -531,7 +532,7 @@ export default function Wardrobe() {
                   onClick={handleConfirmDetected}
                   disabled={detected.selected.length === 0}
                   className="flex-1 rounded-full py-2.5 text-sm font-medium transition-all disabled:opacity-40"
-                  style={{ backgroundColor: '#1C1917', color: '#FAF7F2' }}
+                  style={{ backgroundColor: '#2D1A0E', color: '#FAF7F2' }}
                 >
                   add {detected.selected.length} {detected.selected.length === 1 ? 'piece' : 'pieces'}
                   {detectedQueue.length > 0 && ' →'}

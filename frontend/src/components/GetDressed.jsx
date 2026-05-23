@@ -44,11 +44,11 @@ function WeatherStrip({ weather }) {
     <div className="flex items-center gap-4 rounded-2xl px-5 py-4 border" style={{ backgroundColor: '#fff', borderColor: '#E3D9CE' }}>
       <span className="text-2xl">{weatherEmoji(weather.condition)}</span>
       <div className="flex-1">
-        <p className="text-sm font-medium" style={{ color: '#1C1917' }}>{weather.city}</p>
+        <p className="text-sm font-medium" style={{ color: '#2D1A0E' }}>{weather.city}</p>
         <p className="text-xs capitalize" style={{ color: '#9B8E84' }}>{weather.description}</p>
       </div>
       <div className="text-right">
-        <p className="text-lg font-medium" style={{ color: '#1C1917' }}>{Math.round(weather.temp_fahrenheit)}°F</p>
+        <p className="text-lg font-medium" style={{ color: '#2D1A0E' }}>{Math.round(weather.temp_fahrenheit)}°F</p>
         <p className="text-xs" style={{ color: '#9B8E84' }}>{Math.round(weather.temp_celsius)}°C</p>
       </div>
     </div>
@@ -61,7 +61,7 @@ function OutfitItemTile({ item }) {
       <div className="w-20 h-20 rounded-xl overflow-hidden" style={{ backgroundColor: '#F0EAE2' }}>
         <img src={`${API}${item.image_url}`} alt={item.type} className="w-full h-full object-cover" />
       </div>
-      <p className="text-xs text-center capitalize leading-tight" style={{ color: '#6B5E57' }}>
+      <p className="text-xs text-center capitalize leading-tight" style={{ color: '#4A3020' }}>
         {item.subtype || item.type}
       </p>
       {item.color && (
@@ -190,7 +190,7 @@ export default function GetDressed() {
     <div className="space-y-10 max-w-2xl">
       {/* Header */}
       <div>
-        <h2 className="serif-italic text-3xl leading-snug" style={{ color: '#1C1917' }}>
+        <h2 className="serif-italic text-3xl leading-snug" style={{ color: '#2D1A0E' }}>
           so, what are we wearing?
         </h2>
         <p className="text-sm mt-1" style={{ color: '#9B8E84' }}>
@@ -210,7 +210,7 @@ export default function GetDressed() {
           onKeyDown={e => e.key === 'Enter' && handleSubmit()}
           placeholder="office meeting, dinner date, beach day…"
           className="w-full border-b-2 bg-transparent pb-2 text-sm focus:outline-none transition-all"
-          style={{ borderColor: occasion ? '#B5756A' : '#E3D9CE', color: '#1C1917' }}
+          style={{ borderColor: occasion ? '#8B1A1A' : '#E3D9CE', color: '#2D1A0E' }}
         />
         {isVibeMode && (
           <p className="text-xs" style={{ color: '#C4B5AC' }}>
@@ -229,13 +229,13 @@ export default function GetDressed() {
               onClick={() => setMood(m.key)}
               className="flex flex-col items-center gap-1.5 rounded-2xl border px-4 py-3.5 w-[5.5rem] transition-all duration-200 text-center"
               style={mood === m.key
-                ? { backgroundColor: '#EED9D5', borderColor: '#B5756A', color: '#8B4A42' }
+                ? { backgroundColor: '#F0DADA', borderColor: '#8B1A1A', color: '#6B1010' }
                 : { backgroundColor: '#fff', borderColor: '#E3D9CE', color: '#9B8E84' }
               }
             >
               <span className="text-xl">{m.emoji}</span>
               <span className="text-xs font-medium leading-tight">{m.label}</span>
-              <span className="text-[10px] leading-tight" style={{ color: mood === m.key ? '#B5756A' : '#C4B5AC' }}>{m.sub}</span>
+              <span className="text-[10px] leading-tight" style={{ color: mood === m.key ? '#8B1A1A' : '#C4B5AC' }}>{m.sub}</span>
             </button>
           ))}
         </div>
@@ -248,9 +248,9 @@ export default function GetDressed() {
         {coords ? (
           /* Location detected */
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 rounded-full px-3 py-1.5 border flex-1" style={{ borderColor: '#B5756A', backgroundColor: '#EED9D5' }}>
+            <div className="flex items-center gap-2 rounded-full px-3 py-1.5 border flex-1" style={{ borderColor: '#8B1A1A', backgroundColor: '#F0DADA' }}>
               <span className="text-sm">📍</span>
-              <span className="text-xs" style={{ color: '#8B4A42' }}>location detected</span>
+              <span className="text-xs" style={{ color: '#6B1010' }}>location detected</span>
             </div>
             <button
               onClick={() => setCoords(null)}
@@ -271,7 +271,7 @@ export default function GetDressed() {
                 style={{ borderColor: '#E3D9CE', color: '#9B8E84', backgroundColor: '#fff' }}
               >
                 {locating
-                  ? <span className="w-3 h-3 rounded-full border border-[#E3D9CE] border-t-[#B5756A] animate-spin inline-block" />
+                  ? <span className="w-3 h-3 rounded-full border border-[#E3D9CE] border-t-[#8B1A1A] animate-spin inline-block" />
                   : '📍'
                 }
                 {locating ? 'locating…' : 'use my location'}
@@ -285,7 +285,7 @@ export default function GetDressed() {
               onKeyDown={e => e.key === 'Enter' && handleSubmit()}
               placeholder="type your city…"
               className="w-full border-b-2 bg-transparent pb-2 text-sm focus:outline-none transition-all"
-              style={{ borderColor: city ? '#B5756A' : '#E3D9CE', color: '#1C1917' }}
+              style={{ borderColor: city ? '#8B1A1A' : '#E3D9CE', color: '#2D1A0E' }}
             />
           </div>
         )}
@@ -296,7 +296,7 @@ export default function GetDressed() {
         onClick={handleSubmit}
         disabled={!canSubmit}
         className="flex items-center gap-2 rounded-full px-7 py-3 text-sm font-medium transition-all disabled:opacity-40"
-        style={{ backgroundColor: '#1C1917', color: '#FAF7F2' }}
+        style={{ backgroundColor: '#2D1A0E', color: '#FAF7F2' }}
       >
         {loading && <div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />}
         {loading ? 'finding your look…' : isVibeMode ? 'style my outfit →' : 'dress me →'}
@@ -304,7 +304,7 @@ export default function GetDressed() {
 
       {/* Error */}
       {error && (
-        <p className="text-sm rounded-xl px-4 py-3 border" style={{ color: '#8B4A42', backgroundColor: '#EED9D5', borderColor: '#E3C5BF' }}>
+        <p className="text-sm rounded-xl px-4 py-3 border" style={{ color: '#6B1010', backgroundColor: '#F0DADA', borderColor: '#E8CECE' }}>
           {error}
         </p>
       )}
@@ -316,7 +316,7 @@ export default function GetDressed() {
 
           {result.mode === 'vibe' ? (
             <div className="space-y-4">
-              <p className="serif text-lg" style={{ color: '#1C1917' }}>
+              <p className="serif text-lg" style={{ color: '#2D1A0E' }}>
                 styled for <em>{occasion}</em> —
               </p>
               {hasOutfits ? (
@@ -333,7 +333,7 @@ export default function GetDressed() {
           ) : (
             hasOutfits ? (
               <div className="space-y-4">
-                <p className="serif text-lg" style={{ color: '#1C1917' }}>here's what i'd wear —</p>
+                <p className="serif text-lg" style={{ color: '#2D1A0E' }}>here's what i'd wear —</p>
                 {result.outfits.filter(o => o.items?.length > 0).map((outfit, i) => (
                   <OutfitCard key={i} outfit={outfit} mood={mood} occasion={occasion} weather={result.weather} />
                 ))}

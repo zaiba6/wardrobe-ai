@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
+import ClothesLoader from './ClothesLoader'
 
 const API = import.meta.env.VITE_API_URL ?? ''
 
@@ -17,7 +18,7 @@ function InspoCard({ item, onDelete }) {
       <div className="aspect-square relative overflow-hidden" style={{ backgroundColor: '#F0EAE2' }}>
         <img src={`${API}${item.image_url}`} alt="inspo" className="w-full h-full object-cover" />
         {hovered && item.items_detected?.length > 0 && (
-          <div className="absolute inset-0 flex flex-col justify-end p-3" style={{ backgroundColor: 'rgba(28,25,23,0.6)' }}>
+          <div className="absolute inset-0 flex flex-col justify-end p-3" style={{ backgroundColor: 'rgba(45,26,14,0.6)' }}>
             <p className="text-white text-xs leading-relaxed">{detectedText}</p>
           </div>
         )}
@@ -46,15 +47,15 @@ function RecCard({ rec }) {
   return (
     <div className="rounded-2xl border p-4 space-y-2 transition-all" style={{ backgroundColor: '#fff', borderColor: '#E3D9CE' }}>
       <div className="flex items-start justify-between gap-2">
-        <h4 className="serif text-base capitalize" style={{ color: '#1C1917' }}>{rec.item_type}</h4>
-        <span className="text-xs rounded-full px-2.5 py-0.5 shrink-0" style={{ backgroundColor: '#EED9D5', color: '#8B4A42' }}>
+        <h4 className="serif text-base capitalize" style={{ color: '#2D1A0E' }}>{rec.item_type}</h4>
+        <span className="text-xs rounded-full px-2.5 py-0.5 shrink-0" style={{ backgroundColor: '#F0DADA', color: '#6B1010' }}>
           saved {rec.inspo_count}×
         </span>
       </div>
-      <p className="text-xs" style={{ color: rec.owned_count > 0 ? '#9B8E84' : '#B5756A' }}>
+      <p className="text-xs" style={{ color: rec.owned_count > 0 ? '#9B8E84' : '#8B1A1A' }}>
         {rec.owned_count > 0 ? `you own ${rec.owned_count} similar piece${rec.owned_count > 1 ? 's' : ''}` : 'not in your closet yet'}
       </p>
-      <p className="text-sm" style={{ color: '#6B5E57' }}>{rec.suggestion}</p>
+      <p className="text-sm" style={{ color: '#4A3020' }}>{rec.suggestion}</p>
     </div>
   )
 }
@@ -114,7 +115,7 @@ export default function Inspo() {
     <div className="space-y-10">
       {/* Header */}
       <div>
-        <h2 className="serif-italic text-3xl leading-snug" style={{ color: '#1C1917' }}>the inspo board</h2>
+        <h2 className="serif-italic text-3xl leading-snug" style={{ color: '#2D1A0E' }}>the inspo board</h2>
         <p className="text-sm mt-1" style={{ color: '#9B8E84' }}>
           save what inspires you — we'll figure out what's missing from your closet
         </p>
@@ -122,7 +123,7 @@ export default function Inspo() {
 
       {/* Upload */}
       <div
-        className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all duration-200 ${dragOver ? 'border-[#B5756A] bg-[#EED9D5]/30' : 'border-[#E3D9CE] hover:border-[#B5756A]/40'}`}
+        className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all duration-200 ${dragOver ? 'border-[#8B1A1A] bg-[#F0DADA]/30' : 'border-[#E3D9CE] hover:border-[#8B1A1A]/40'}`}
         onClick={() => !uploading && fileInputRef.current?.click()}
         onDragOver={e => { e.preventDefault(); setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
@@ -131,8 +132,8 @@ export default function Inspo() {
         <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={e => { handleUpload(e.target.files); e.target.value = '' }} />
         {uploading ? (
           <div className="flex flex-col items-center gap-3">
-            <div className="w-7 h-7 rounded-full border-2 border-[#E3D9CE] border-t-[#B5756A] animate-spin" />
-            <p className="text-sm" style={{ color: '#B5756A' }}>{uploadStatus}</p>
+            <ClothesLoader />
+            <p className="text-sm" style={{ color: '#8B1A1A' }}>{uploadStatus}</p>
           </div>
         ) : (
           <div className="space-y-1">
@@ -146,7 +147,7 @@ export default function Inspo() {
       {!loadingRecs && recommendations.length > 0 && (
         <div className="space-y-4">
           <div>
-            <h3 className="serif text-lg" style={{ color: '#1C1917' }}>your capsule gaps</h3>
+            <h3 className="serif text-lg" style={{ color: '#2D1A0E' }}>your capsule gaps</h3>
             <p className="text-sm mt-0.5" style={{ color: '#9B8E84' }}>
               pieces you keep saving but don't own yet
             </p>
@@ -161,14 +162,14 @@ export default function Inspo() {
       <div className="space-y-4">
         {inspoItems.length > 0 && (
           <div className="flex items-center justify-between">
-            <h3 className="serif text-lg" style={{ color: '#1C1917' }}>saved</h3>
+            <h3 className="serif text-lg" style={{ color: '#2D1A0E' }}>saved</h3>
             <span className="text-xs" style={{ color: '#9B8E84' }}>{inspoItems.length} images</span>
           </div>
         )}
 
         {loadingInspo ? (
           <div className="flex justify-center py-20">
-            <div className="w-6 h-6 rounded-full border-2 border-[#E3D9CE] border-t-[#B5756A] animate-spin" />
+            <ClothesLoader />
           </div>
         ) : inspoItems.length === 0 ? (
           <div className="text-center py-24 space-y-2">

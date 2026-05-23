@@ -6,8 +6,8 @@ export default function Login() {
       <div className="w-full max-w-sm text-center space-y-10">
         {/* Brand */}
         <div className="space-y-2">
-          <h1 className="serif-italic text-4xl leading-tight" style={{ color: '#1C1917' }}>
-            wait what do i wear.com
+          <h1 className="serif-italic text-4xl leading-tight" style={{ color: '#2D1A0E' }}>
+            wait what do i wear?
           </h1>
           <p className="text-xs tracking-widest uppercase" style={{ color: '#9B8E84' }}>
             check your floordrobe
@@ -16,7 +16,7 @@ export default function Login() {
 
         {/* Tagline */}
         <div className="space-y-1">
-          <p className="serif-italic text-lg" style={{ color: '#6B5E57' }}>
+          <p className="serif-italic text-lg" style={{ color: '#4A3020' }}>
             your closet, your outfits, your vibe.
           </p>
           <p className="text-sm" style={{ color: '#C4B5AC' }}>
@@ -27,8 +27,8 @@ export default function Login() {
         {/* Google button */}
         <a
           href={`${API}/api/auth/google`}
-          className="flex items-center justify-center gap-3 w-full rounded-full px-6 py-3.5 border text-sm font-medium transition-all hover:bg-[#EED9D5] hover:border-[#B5756A]"
-          style={{ borderColor: '#E3D9CE', color: '#1C1917', backgroundColor: '#fff' }}
+          className="flex items-center justify-center gap-3 w-full rounded-full px-6 py-3.5 border text-sm font-medium transition-all hover:bg-[#F0DADA] hover:border-[#8B1A1A]"
+          style={{ borderColor: '#E3D9CE', color: '#2D1A0E', backgroundColor: '#fff' }}
         >
           {/* Google "G" logo */}
           <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">

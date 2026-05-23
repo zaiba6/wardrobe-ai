@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import Login from './components/Login'
+import ClothesLoader from './components/ClothesLoader'
 import Wardrobe from './components/Wardrobe'
 import GetDressed from './components/GetDressed'
 import Inspo from './components/Inspo'
@@ -20,7 +21,7 @@ function AppShell() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#FAF7F2' }}>
-        <div className="w-6 h-6 rounded-full border-2 border-[#E3D9CE] border-t-[#B5756A] animate-spin" />
+        <ClothesLoader />
       </div>
     )
   }
@@ -33,8 +34,8 @@ function AppShell() {
         <div className="max-w-4xl mx-auto px-6 pt-6 pb-0">
           <div className="mb-5 flex items-start justify-between">
             <div>
-              <h1 className="serif-italic text-3xl leading-none" style={{ color: '#1C1917' }}>
-                wait what do i wear.com
+              <h1 className="serif-italic text-3xl leading-none" style={{ color: '#2D1A0E' }}>
+                wait what do i wear?
               </h1>
               <p className="text-xs mt-1.5 tracking-widest uppercase" style={{ color: '#9B8E84' }}>
                 check your floordrobe
@@ -69,8 +70,8 @@ function AppShell() {
                 onClick={() => setActiveTab(tab.key)}
                 className={`pb-3 text-sm whitespace-nowrap transition-all duration-200 border-b-2 ${
                   activeTab === tab.key
-                    ? 'border-[#B5756A] text-[#B5756A] font-medium'
-                    : 'border-transparent text-[#9B8E84] hover:text-[#1C1917]'
+                    ? 'border-[#8B1A1A] text-[#8B1A1A] font-medium'
+                    : 'border-transparent text-[#9B8E84] hover:text-[#2D1A0E]'
                 }`}
               >
                 {tab.label}

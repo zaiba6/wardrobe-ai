@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
+import ClothesLoader from './ClothesLoader'
 
 const API = import.meta.env.VITE_API_URL ?? ''
 
@@ -39,7 +40,7 @@ export default function OutfitsWorn() {
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h2 className="serif text-2xl" style={{ color: '#1C1917' }}>outfits worn</h2>
+        <h2 className="serif text-2xl" style={{ color: '#2D1A0E' }}>outfits worn</h2>
         <p className="text-sm mt-0.5" style={{ color: '#9B8E84' }}>
           {logs.length} {logs.length === 1 ? 'outfit' : 'outfits'} saved
         </p>
@@ -47,7 +48,7 @@ export default function OutfitsWorn() {
 
       {loading ? (
         <div className="flex justify-center py-20">
-          <div className="w-6 h-6 rounded-full border-2 border-[#E3D9CE] border-t-[#B5756A] animate-spin" />
+          <ClothesLoader />
         </div>
       ) : logs.length === 0 ? (
         <div className="text-center py-24 space-y-2">
@@ -63,12 +64,12 @@ export default function OutfitsWorn() {
               {/* Meta row */}
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
-                  <p className="text-sm font-medium" style={{ color: '#1C1917' }}>
+                  <p className="text-sm font-medium" style={{ color: '#2D1A0E' }}>
                     {formatDate(log.worn_at)}
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {log.occasion && (
-                      <span className="text-xs px-2 py-0.5 rounded-full capitalize" style={{ backgroundColor: '#EED9D5', color: '#8B4A42' }}>
+                      <span className="text-xs px-2 py-0.5 rounded-full capitalize" style={{ backgroundColor: '#F0DADA', color: '#6B1010' }}>
                         {log.occasion}
                       </span>
                     )}

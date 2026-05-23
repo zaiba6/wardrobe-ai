@@ -7,7 +7,7 @@
 body {
   font-family: 'DM Sans', sans-serif;
   background-color: #FAF7F2;
-  color: #1C1917;
+  color: #2D1A0E;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -15,3 +15,31 @@ body {
 .serif-italic { font-family: 'Playfair Display', serif; font-style: italic; }
 
 input, textarea, select { font-family: 'DM Sans', sans-serif; }
+
+/* Stacking clothes loader animation */
+@keyframes clothesDrop {
+  0%        { opacity: 0; transform: translateY(-28px) rotate(-6deg); }
+  28%       { opacity: 1; transform: translateY(3px)   rotate(2deg);  }
+  42%, 80%  { opacity: 1; transform: translateY(0)     rotate(0deg);  }
+  95%, 100% { opacity: 0; transform: translateY(0);                   }
+}
+
+.clothes-loader {
+  position: relative;
+  width: 52px;
+  height: 80px;
+}
+
+.clothes-loader span {
+  position: absolute;
+  left: 0; right: 0;
+  text-align: center;
+  font-size: 1.4rem;
+  opacity: 0;
+  animation: clothesDrop 1.8s ease-in-out infinite;
+}
+
+.clothes-loader span:nth-child(1) { bottom: 0;    animation-delay: 0s;    }
+.clothes-loader span:nth-child(2) { bottom: 18px; animation-delay: 0.35s; }
+.clothes-loader span:nth-child(3) { bottom: 36px; animation-delay: 0.70s; }
+.clothes-loader span:nth-child(4) { bottom: 54px; animation-delay: 1.05s; }
