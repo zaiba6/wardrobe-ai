@@ -254,35 +254,39 @@ export default function Wardrobe() {
 
   const handleUpload = async (files) => {
     const all  = files instanceof FileList ? Array.from(files) : [files]
-    const list = all.slice(0, 5)   // cap at 5 per batch
+    const list = all.slice(0, 5)
     if (!list.length) return
-    if (all.length > 5) setUploadStatus('taking the first 5 photos…')
     setUploading(true)
+    if (all.length > 5) setUploadStatus('taking the first 5 photos…')
     const multiQueue = []
-    for (let i = 0; i < list.length; i++) {
-      setUploadStatus(`analyzing ${i + 1} of ${list.length}…`)
-      try {
-        const fd = new FormData()
-        fd.append('image', list[i])
-        const res = await axios.post(`${API}/api/clothes/detect`, fd)
-        const { filename, image_url, items } = res.data
-        const itemsTagged = items.map(it => ({ ...it, _dup: findDuplicate(it) }))
-        const hasDup = itemsTagged.some(it => it._dup)
+    try {
+      for (let i = 0; i < list.length; i++) {
+        setUploadStatus(`analyzing ${i + 1} of ${list.length}…`)
+        try {
+          const fd = new FormData()
+          fd.append('image', list[i])
+          const res = await axios.post(`${API}/api/clothes/detect`, fd)
+          const { filename, image_url, items } = res.data
+          const itemsTagged = items.map(it => ({ ...it, _dup: findDuplicate(it) }))
+          const hasDup = itemsTagged.some(it => it._dup)
 
-        if (items.length === 1 && !hasDup) {
-          const save = await axios.post(`${API}/api/clothes/save-detected`, { filename, items })
-          setClothes(p => [...save.data, ...p])
-        } else {
-          multiQueue.push({ filename, image_url, items: itemsTagged, selected: items.map((_, idx) => idx) })
+          if (items.length === 1 && !hasDup) {
+            const save = await axios.post(`${API}/api/clothes/save-detected`, { filename, items })
+            setClothes(p => [...save.data, ...p])
+          } else {
+            multiQueue.push({ filename, image_url, items: itemsTagged, selected: items.map((_, idx) => idx) })
+          }
+        } catch {
+          // skip failed photo, continue
         }
-      } catch {
-        // skip failed photo, continue
+        if (i < list.length - 1) await new Promise(r => setTimeout(r, 700))
       }
-      // small pause between calls to avoid API rate limits
-      if (i < list.length - 1) await new Promise(r => setTimeout(r, 700))
+    } finally {
+      // always re-enable uploads, even if something unexpected throws
+      setUploading(false)
+      setUploadStatus('')
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
-    setUploading(false)
-    setUploadStatus('')
     if (multiQueue.length > 0) {
       setDetectedQueue(multiQueue.slice(1))
       setDetected({ ...multiQueue[0], queueTotal: multiQueue.length })
