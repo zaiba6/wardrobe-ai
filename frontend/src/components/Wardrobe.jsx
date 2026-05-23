@@ -253,36 +253,36 @@ export default function Wardrobe() {
   }
 
   const handleUpload = async (files) => {
-    const list = files instanceof FileList ? Array.from(files) : [files]
+    const all  = files instanceof FileList ? Array.from(files) : [files]
+    const list = all.slice(0, 5)   // cap at 5 per batch
     if (!list.length) return
+    if (all.length > 5) setUploadStatus('taking the first 5 photos…')
     setUploading(true)
     const multiQueue = []
     for (let i = 0; i < list.length; i++) {
-      setUploadStatus(list.length > 1 ? `analyzing ${i + 1} of ${list.length}…` : 'reading your photo…')
+      setUploadStatus(`analyzing ${i + 1} of ${list.length}…`)
       try {
         const fd = new FormData()
         fd.append('image', list[i])
         const res = await axios.post(`${API}/api/clothes/detect`, fd)
         const { filename, image_url, items } = res.data
-        // Tag each item with a duplicate match (if any)
         const itemsTagged = items.map(it => ({ ...it, _dup: findDuplicate(it) }))
         const hasDup = itemsTagged.some(it => it._dup)
 
         if (items.length === 1 && !hasDup) {
-          // single unique item — save immediately, keep looping
           const save = await axios.post(`${API}/api/clothes/save-detected`, { filename, items })
           setClothes(p => [...save.data, ...p])
         } else {
-          // multi-item OR has a duplicate — queue for confirmation
           multiQueue.push({ filename, image_url, items: itemsTagged, selected: items.map((_, idx) => idx) })
         }
       } catch {
         // skip failed photo, continue
       }
+      // small pause between calls to avoid API rate limits
+      if (i < list.length - 1) await new Promise(r => setTimeout(r, 700))
     }
     setUploading(false)
     setUploadStatus('')
-    // Show queued multi-item photos one by one
     if (multiQueue.length > 0) {
       setDetectedQueue(multiQueue.slice(1))
       setDetected({ ...multiQueue[0], queueTotal: multiQueue.length })
@@ -371,7 +371,7 @@ export default function Wardrobe() {
         ) : (
           <div className="space-y-1">
             <p className="serif-italic text-xl" style={{ color: '#9B8E84' }}>drop a photo here</p>
-            <p className="text-xs tracking-wide" style={{ color: '#C4B5AC' }}>or tap to choose from camera roll</p>
+            <p className="text-xs tracking-wide" style={{ color: '#C4B5AC' }}>up to 5 photos at once · camera roll or drag & drop</p>
           </div>
         )}
       </div>
