@@ -1,8 +1,10 @@
 import json
 import os
 import random
+import re
 import shutil
 import uuid
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlencode
@@ -282,6 +284,11 @@ class OutfitLogBody(BaseModel):
 
 class SaveFromUrlBody(BaseModel):
     image_url: str
+
+
+class PinterestImportBody(BaseModel):
+    board_url: str
+    max_pins:  int = 12
 
 
 class InspoOutfitBody(BaseModel):
@@ -687,6 +694,104 @@ def inspo_recommendations(user_id: int = Depends(get_current_user_id), db: Sessi
                      "suggestion": f"You've saved {rt} {count} time{'s' if count != 1 else ''} — consider adding this to your wardrobe for a true capsule look."})
     recs.sort(key=lambda r: r["inspo_count"], reverse=True)
     return {"recommendations": recs, "total_inspo_items": len(inspo_items)}
+
+
+# ---------------------------------------------------------------------------
+# Pinterest board import
+# ---------------------------------------------------------------------------
+
+_PINTEREST_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "application/rss+xml, application/xml, text/xml, */*",
+}
+
+def _upgrade_pinterest_img_url(url: str) -> str:
+    """Swap low-res Pinterest CDN paths to 736x for better AI analysis."""
+    return re.sub(r'/\d+x/', '/736x/', url)
+
+def _extract_images_from_rss(xml_bytes: bytes, max_pins: int) -> list[str]:
+    ns = {"media": "http://search.yahoo.com/mrss/"}
+    root = ET.fromstring(xml_bytes)
+    urls: list[str] = []
+    for item in root.findall(".//item"):
+        if len(urls) >= max_pins:
+            break
+        # Try media:thumbnail first
+        thumb = item.find("media:thumbnail", ns)
+        if thumb is not None and thumb.get("url"):
+            urls.append(_upgrade_pinterest_img_url(thumb.get("url")))
+            continue
+        # Fall back to <img src> inside <description>
+        desc = item.findtext("description") or ""
+        m = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', desc)
+        if m:
+            urls.append(_upgrade_pinterest_img_url(m.group(1)))
+    return urls
+
+
+@app.post("/api/inspo/import-pinterest")
+def import_pinterest_board(
+    body:    PinterestImportBody,
+    user_id: int     = Depends(get_current_user_id),
+    db:      Session = Depends(get_db),
+):
+    url = body.board_url.strip()
+    if not url.startswith("http"):
+        url = "https://" + url
+    if "pinterest.com" not in url:
+        raise HTTPException(status_code=400, detail="Please enter a valid Pinterest board URL.")
+
+    rss_url = url.rstrip("/") + "/rss/"
+    try:
+        resp = http_requests.get(rss_url, headers=_PINTEREST_HEADERS, timeout=15)
+    except Exception:
+        raise HTTPException(status_code=502, detail="Could not reach Pinterest — check your connection.")
+
+    if resp.status_code != 200:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Pinterest returned {resp.status_code}. Make sure the board is public and the URL is correct.",
+        )
+
+    try:
+        img_urls = _extract_images_from_rss(resp.content, body.max_pins)
+    except ET.ParseError:
+        raise HTTPException(status_code=400, detail="Could not parse Pinterest feed. The board may be private.")
+
+    if not img_urls:
+        raise HTTPException(status_code=400, detail="No images found in this board. It may be empty or private.")
+
+    imported: list[InspoItem] = []
+    for img_url in img_urls:
+        try:
+            img_resp = http_requests.get(img_url, headers=_PINTEREST_HEADERS, timeout=10)
+            if img_resp.status_code != 200:
+                continue
+            content_type = img_resp.headers.get("Content-Type", "image/jpeg")
+            ext = ".jpg" if "jpeg" in content_type else ".png" if "png" in content_type else ".jpg"
+            filename = f"{uuid.uuid4()}{ext}"
+            (UPLOAD_DIR / filename).write_bytes(img_resp.content)
+
+            result = analyze_inspo_image(str(UPLOAD_DIR / filename))
+            item = InspoItem(
+                user_id=user_id,
+                filename=filename,
+                items_detected=json.dumps(result.get("items", [])),
+                style_notes=result.get("style_notes", ""),
+            )
+            db.add(item)
+            imported.append(item)
+        except Exception:
+            continue
+
+    if not imported:
+        raise HTTPException(status_code=400, detail="Could not download any images from this board.")
+
+    db.commit()
+    for item in imported:
+        db.refresh(item)
+
+    return {"imported": len(imported), "items": [serialize_inspo(i) for i in imported]}
 
 
 # ---------------------------------------------------------------------------

@@ -114,6 +114,12 @@ export default function Inspo() {
   const fileInputRef = useRef(null)
 
   // Selection state
+  // Pinterest import state
+  const [pinterestUrl, setPinterestUrl] = useState('')
+  const [importing, setImporting]       = useState(false)
+  const [importMsg, setImportMsg]       = useState(null)   // { ok: bool, text: str }
+
+  // Selection state
   const [selectedIds, setSelectedIds] = useState(new Set())
 
   // Get-a-look panel state
@@ -160,6 +166,23 @@ export default function Inspo() {
     fetchRecs()
     setUploading(false)
     setUploadStatus('')
+  }
+
+  const handlePinterestImport = async () => {
+    if (!pinterestUrl.trim() || importing) return
+    setImporting(true)
+    setImportMsg(null)
+    try {
+      const res = await axios.post(`${API}/api/inspo/import-pinterest`, { board_url: pinterestUrl.trim() })
+      setInspoItems(p => [...res.data.items, ...p])
+      fetchRecs()
+      setPinterestUrl('')
+      setImportMsg({ ok: true, text: `imported ${res.data.imported} pins ✦` })
+    } catch (err) {
+      setImportMsg({ ok: false, text: err.response?.data?.detail || 'could not import board — make sure it\'s public' })
+    } finally {
+      setImporting(false)
+    }
   }
 
   const handleDelete = async (id) => {
@@ -235,6 +258,50 @@ export default function Inspo() {
         <p className="text-sm mt-1" style={{ color: '#9B8E84' }}>
           save what inspires you — select up to 10 to get a look for today
         </p>
+      </div>
+
+      {/* Pinterest board import */}
+      <div className="rounded-2xl border p-5 space-y-3" style={{ backgroundColor: '#fff', borderColor: '#E3D9CE' }}>
+        <div className="flex items-center gap-2">
+          {/* Pinterest P logo */}
+          <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="#E60023">
+            <path d="M12 0C5.373 0 0 5.373 0 12c0 5.084 3.163 9.426 7.627 11.174-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 0 1 .083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0z"/>
+          </svg>
+          <p className="text-sm font-medium" style={{ color: '#2D1A0E' }}>link a Pinterest board</p>
+        </div>
+        <p className="text-xs" style={{ color: '#9B8E84' }}>paste a public board URL — we'll pull the pins and analyze your style</p>
+        <div className="flex gap-2">
+          <input
+            type="url"
+            value={pinterestUrl}
+            onChange={e => { setPinterestUrl(e.target.value); setImportMsg(null) }}
+            onKeyDown={e => e.key === 'Enter' && handlePinterestImport()}
+            placeholder="https://www.pinterest.com/you/your-board/"
+            className="flex-1 border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#8B1A1A]"
+            style={{ borderColor: '#E3D9CE', color: '#2D1A0E', backgroundColor: '#FAF7F2' }}
+            disabled={importing}
+          />
+          <button
+            onClick={handlePinterestImport}
+            disabled={importing || !pinterestUrl.trim()}
+            className="shrink-0 rounded-xl px-4 py-2 text-sm font-medium transition-all disabled:opacity-40 flex items-center gap-2"
+            style={{ backgroundColor: '#E60023', color: '#fff' }}
+          >
+            {importing && <span className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin inline-block" />}
+            {importing ? 'importing…' : 'import'}
+          </button>
+        </div>
+        {importMsg && (
+          <p className="text-xs" style={{ color: importMsg.ok ? '#7A9E7A' : '#8B1A1A' }}>
+            {importMsg.text}
+          </p>
+        )}
+        {importing && (
+          <div className="flex items-center gap-2">
+            <ClothesLoader />
+            <p className="text-xs" style={{ color: '#9B8E84' }}>analyzing your pins — this takes ~30 seconds</p>
+          </div>
+        )}
       </div>
 
       {/* Upload */}
