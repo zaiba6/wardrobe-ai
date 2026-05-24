@@ -491,7 +491,7 @@ export default function Wardrobe() {
             onClick={e => e.stopPropagation()}
           >
             <div className="h-44 overflow-hidden rounded-t-3xl sm:rounded-t-2xl relative" style={{ backgroundColor: '#E3D9CE' }}>
-              <img src={`${API}${detected.image_url}`} alt="" className="w-full h-full object-cover object-top" />
+              <img src={`${API}${detected.image_url}`} alt="" className="w-full h-full object-cover object-center" />
               <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(45,26,14,0.4), transparent)' }} />
               <div className="absolute bottom-3 left-5 right-5 flex items-end justify-between">
                 <p className="text-white text-sm font-medium">

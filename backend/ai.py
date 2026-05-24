@@ -23,21 +23,32 @@ def _get_client() -> anthropic.Anthropic:
 
 
 def _encode_image(image_path: str) -> tuple[str, str]:
-    """Return (base64_data, media_type) for the given image file."""
-    ext = Path(image_path).suffix.lower().lstrip(".")
-    media_type_map = {
-        "jpg": "image/jpeg",
-        "jpeg": "image/jpeg",
-        "png": "image/png",
-        "webp": "image/webp",
-        "gif": "image/gif",
-    }
-    media_type = media_type_map.get(ext, "image/jpeg")
+    """
+    Return (base64_data, media_type) for Claude.
+    Resizes to max 1280px in memory — reduces cost and latency without
+    touching the stored original.
+    """
+    import io
+    from PIL import Image
 
-    with open(image_path, "rb") as f:
-        data = base64.standard_b64encode(f.read()).decode("utf-8")
+    img = Image.open(image_path)
 
-    return data, media_type
+    # Resize down if needed (Claude doesn't benefit from >1280px)
+    max_dim = 1280
+    w, h = img.size
+    if max(w, h) > max_dim:
+        ratio = max_dim / max(w, h)
+        img = img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
+
+    # Normalise to RGB JPEG (handles RGBA, palette, HEIC-converted etc.)
+    if img.mode != "RGB":
+        img = img.convert("RGB")
+
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=85)
+    data = base64.standard_b64encode(buf.getvalue()).decode("utf-8")
+
+    return data, "image/jpeg"
 
 
 def tag_clothing_image(image_path: str) -> dict:
