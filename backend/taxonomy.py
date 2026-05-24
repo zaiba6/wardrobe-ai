@@ -11,7 +11,7 @@ Layer 3 (VALID_SUBTYPES) is our master list — final validation and fallback.
 # Master taxonomy (single source of truth — imported by main.py and ai.py)
 # ---------------------------------------------------------------------------
 
-VALID_TYPES = ["top", "bottom", "dress", "outerwear", "shoes", "accessory", "jumpsuit", "skirt"]
+VALID_TYPES = ["top", "bottom", "dress", "outerwear", "shoes", "accessory", "jumpsuit", "skirt", "activewear"]
 
 VALID_SUBTYPES: dict[str, list[str]] = {
     "top":       ["tank top", "crop top", "t-shirt", "blouse", "going out top",
@@ -25,7 +25,8 @@ VALID_SUBTYPES: dict[str, list[str]] = {
     "shoes":     ["sneakers", "ankle boots", "boots", "knee-high boots", "heels",
                   "sandals", "loafers", "flats", "platform shoes", "mules"],
     "accessory": ["bag", "belt", "hat", "sunglasses", "jewelry", "scarf", "watch"],
-    "jumpsuit":  ["jumpsuit", "romper", "playsuit"],
+    "jumpsuit":   ["jumpsuit", "romper", "playsuit"],
+    "activewear": ["sports bra", "athletic leggings", "gym shorts", "athletic top", "sports jacket", "yoga pants", "track pants", "swimwear"],
 }
 
 # ---------------------------------------------------------------------------
@@ -328,6 +329,40 @@ SUBTYPE_ALIASES: dict[str, str] = {
     # ── jumpsuits ─────────────────────────────────────────────────────────
     "overalls":                  "jumpsuit",
     "dungarees":                 "jumpsuit",
+
+    # ── activewear ────────────────────────────────────────────────────────
+    "sports bra top":            "sports bra",
+    "bra top":                   "sports bra",
+    "gym bra":                   "sports bra",
+
+    "gym leggings":              "athletic leggings",
+    "workout leggings":          "athletic leggings",
+    "running leggings":          "athletic leggings",
+    "compression tights":        "athletic leggings",
+    "running tights":            "athletic leggings",
+
+    "athletic shorts":           "gym shorts",
+    "running shorts":            "gym shorts",
+    "sports shorts":             "gym shorts",
+    "workout shorts":            "gym shorts",
+
+    "workout top":               "athletic top",
+    "gym top":                   "athletic top",
+    "running top":               "athletic top",
+    "athletic shirt":            "athletic top",
+    "performance top":           "athletic top",
+
+    "gym jacket":                "sports jacket",
+    "track jacket":              "sports jacket",
+    "windbreaker":               "sports jacket",
+    "athletic jacket":           "sports jacket",
+
+    "swimsuit":                  "swimwear",
+    "bikini":                    "swimwear",
+    "one piece":                 "swimwear",
+    "one-piece":                 "swimwear",
+    "bathing suit":              "swimwear",
+    "swim shorts":               "swimwear",
 }
 
 

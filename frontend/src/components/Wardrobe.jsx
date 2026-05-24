@@ -4,7 +4,7 @@ import ClothesLoader from './ClothesLoader'
 
 const API = import.meta.env.VITE_API_URL ?? ''
 
-const TYPE_OPTIONS = ['top', 'bottom', 'dress', 'outerwear', 'shoes', 'accessory', 'jumpsuit', 'skirt']
+const TYPE_OPTIONS = ['top', 'bottom', 'dress', 'outerwear', 'shoes', 'accessory', 'jumpsuit', 'skirt', 'activewear']
 const FIT_OPTIONS = ['loose', 'oversized', 'regular', 'fitted', 'bodycon']
 const FORMALITY_OPTIONS = ['casual', 'smart-casual', 'formal']
 const SEASON_OPTIONS = ['all-season', 'spring-summer', 'fall-winter']
@@ -17,7 +17,8 @@ const SUBTYPES = {
   outerwear: ['leather jacket', 'denim jacket', 'blazer', 'coat', 'trench coat', 'puffer jacket', 'cardigan', 'bomber jacket'],
   shoes:     ['sneakers', 'ankle boots', 'boots', 'knee-high boots', 'heels', 'sandals', 'loafers', 'flats', 'platform shoes', 'mules'],
   accessory: ['bag', 'belt', 'hat', 'sunglasses', 'jewelry', 'scarf', 'watch'],
-  jumpsuit:  ['jumpsuit', 'romper', 'playsuit'],
+  jumpsuit:   ['jumpsuit', 'romper', 'playsuit'],
+  activewear: ['sports bra', 'athletic leggings', 'gym shorts', 'athletic top', 'sports jacket', 'yoga pants', 'track pants', 'swimwear'],
 }
 
 function Spinner() {
@@ -278,12 +279,8 @@ export default function Wardrobe() {
           const itemsTagged = items.map(it => ({ ...it, _dup: findDuplicate(it) }))
           const hasDup = itemsTagged.some(it => it._dup)
 
-          if (items.length === 1 && !hasDup) {
-            const save = await axios.post(`${API}/api/clothes/save-detected`, { filename, items })
-            setClothes(p => [...save.data, ...p])
-          } else {
-            multiQueue.push({ filename, image_url, items: itemsTagged, selected: items.map((_, idx) => idx) })
-          }
+          // Always queue for confirmation so user can review/edit name + colour
+          multiQueue.push({ filename, image_url, items: itemsTagged, selected: items.map((_, idx) => idx) })
         } catch {
           // skip failed photo, continue
         }
@@ -535,16 +532,26 @@ export default function Wardrobe() {
                         )}
                       </div>
                       <div className="flex-1 space-y-1.5" onClick={e => e.stopPropagation()}>
+                        {/* Editable name */}
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-medium capitalize" style={{ color: '#2D1A0E' }}>{item.description || item.type}</p>
+                          <input
+                            value={item.description || ''}
+                            onChange={e => setDetected(d => ({
+                              ...d,
+                              items: d.items.map((it, i) => i === idx ? { ...it, description: e.target.value } : it),
+                            }))}
+                            placeholder={item.subtype || item.type}
+                            className="text-sm font-medium capitalize bg-transparent border-b border-dashed focus:outline-none flex-1 min-w-0"
+                            style={{ borderColor: '#C4B5AC', color: '#2D1A0E' }}
+                          />
                           {item._dup && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#FEF3C7', color: '#92400E' }}>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0" style={{ backgroundColor: '#FEF3C7', color: '#92400E' }}>
                               already in closet
                             </span>
                           )}
                         </div>
-                        {/* Inline type + subtype correction — always editable */}
-                        <div className="flex gap-1.5 flex-wrap">
+                        {/* Inline type + subtype + color — all editable */}
+                        <div className="flex gap-1.5 flex-wrap items-center">
                           <select
                             value={item.type || ''}
                             onChange={e => setDetected(d => ({
@@ -554,7 +561,7 @@ export default function Wardrobe() {
                             className="text-xs border rounded-full px-2 py-0.5 focus:outline-none"
                             style={{ borderColor: '#E3D9CE', color: '#4A3020', backgroundColor: '#FAF7F2' }}
                           >
-                            {['top','bottom','dress','outerwear','shoes','accessory','jumpsuit','skirt'].map(t => (
+                            {TYPE_OPTIONS.map(t => (
                               <option key={t} value={t}>{t}</option>
                             ))}
                           </select>
@@ -572,7 +579,16 @@ export default function Wardrobe() {
                               {SUBTYPES[item.type].map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
                           )}
-                          <span className="text-xs capitalize" style={{ color: '#C4B5AC' }}>{item.color}</span>
+                          <input
+                            value={item.color || ''}
+                            onChange={e => setDetected(d => ({
+                              ...d,
+                              items: d.items.map((it, i) => i === idx ? { ...it, color: e.target.value } : it),
+                            }))}
+                            placeholder="color"
+                            className="text-xs capitalize bg-transparent border-b border-dashed focus:outline-none w-20"
+                            style={{ borderColor: '#C4B5AC', color: '#C4B5AC' }}
+                          />
                         </div>
                       </div>
                     </button>
