@@ -263,11 +263,9 @@ export default function Wardrobe() {
   }
 
   const handleUpload = async (files) => {
-    const all  = files instanceof FileList ? Array.from(files) : [files]
-    const list = all.slice(0, 5)
+    const list = files instanceof FileList ? Array.from(files) : [files]
     if (!list.length) return
     setUploading(true)
-    if (all.length > 5) setUploadStatus('taking the first 5 photos…')
     const multiQueue = []
     try {
       for (let i = 0; i < list.length; i++) {
@@ -289,10 +287,8 @@ export default function Wardrobe() {
         } catch {
           // skip failed photo, continue
         }
-        if (i < list.length - 1) await new Promise(r => setTimeout(r, 700))
       }
     } finally {
-      // always re-enable uploads, even if something unexpected throws
       setUploading(false)
       setUploadStatus('')
       if (fileInputRef.current) fileInputRef.current.value = ''
