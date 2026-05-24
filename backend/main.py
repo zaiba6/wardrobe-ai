@@ -20,6 +20,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ai import analyze_inspo_image, detect_all_items, suggest_personalized_outfit, suggest_vibe_outfit, tag_clothing_image
+from taxonomy import VALID_SUBTYPES as SUBTYPES
 from auth import (
     GOOGLE_AUTH_URL, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
     GOOGLE_INFO_URL, GOOGLE_TOKEN_URL, REDIRECT_URI, APP_URL,
@@ -55,17 +56,6 @@ with engine.connect() as _conn:
 # ---------------------------------------------------------------------------
 
 app = FastAPI(title="Wardrobe AI API")
-
-SUBTYPES: dict[str, list[str]] = {
-    "top":      ["tank top", "crop top", "t-shirt", "blouse", "going out top", "button-down", "sweater", "hoodie", "bodysuit", "corset top"],
-    "bottom":   ["jeans", "trousers", "shorts", "leggings", "sweatpants", "cargo pants"],
-    "skirt":    ["mini skirt", "midi skirt", "maxi skirt", "pleated skirt", "denim skirt", "slip skirt"],
-    "dress":    ["mini dress", "midi dress", "maxi dress", "bodycon dress", "slip dress", "sundress", "going out dress", "wrap dress"],
-    "outerwear":["leather jacket", "denim jacket", "blazer", "coat", "trench coat", "puffer jacket", "cardigan", "bomber jacket"],
-    "shoes":    ["sneakers", "ankle boots", "boots", "knee-high boots", "heels", "sandals", "loafers", "flats", "platform shoes", "mules"],
-    "accessory":["bag", "belt", "hat", "sunglasses", "jewelry", "scarf", "watch"],
-    "jumpsuit": ["jumpsuit", "romper", "playsuit"],
-}
 
 app.add_middleware(
     CORSMiddleware,

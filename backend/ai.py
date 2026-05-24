@@ -5,6 +5,7 @@ from pathlib import Path
 
 import anthropic
 from dotenv import load_dotenv
+from taxonomy import normalize_clothing_tags
 
 load_dotenv()
 
@@ -90,10 +91,9 @@ def tag_clothing_image(image_path: str) -> dict:
                 raw = raw[4:]
             raw = raw.strip()
 
-        return json.loads(raw)
+        return normalize_clothing_tags(json.loads(raw))
 
     except (json.JSONDecodeError, KeyError, IndexError):
-        # Return sensible defaults so the upload still succeeds
         return {
             "type": "top",
             "color": "unknown",
@@ -157,7 +157,7 @@ def detect_all_items(image_path: str) -> list[dict]:
         result = json.loads(raw)
         if isinstance(result, dict):
             result = [result]
-        return result
+        return [normalize_clothing_tags(item) for item in result]
 
     except (json.JSONDecodeError, KeyError, IndexError):
         return [{
