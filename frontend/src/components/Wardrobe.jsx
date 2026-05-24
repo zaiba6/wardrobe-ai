@@ -141,14 +141,24 @@ function EditModal({ item, onSave, onClose }) {
 
 const FORMALITY_SHORT = { casual: 'casual', 'smart-casual': 'smart', formal: 'formal' }
 
-function PhotoCard({ photo, onEditItem, onDeleteItem }) {
+function PhotoCard({ photo, onEditItem, onDeleteItem, onDeletePhoto }) {
   return (
     <div
       className="rounded-xl overflow-hidden border group"
       style={{ backgroundColor: '#fff', borderColor: '#E3D9CE' }}
     >
-      <div className="aspect-square overflow-hidden" style={{ backgroundColor: '#F0EAE2' }}>
+      <div className="aspect-square overflow-hidden relative group/photo" style={{ backgroundColor: '#F0EAE2' }}>
         <img src={`${API}${photo.image_url}`} alt="" className="w-full h-full object-cover" />
+        <button
+          onClick={e => { e.stopPropagation(); onDeletePhoto(photo) }}
+          className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center opacity-0 group-hover/photo:opacity-100 transition-opacity"
+          style={{ backgroundColor: 'rgba(250,247,242,0.9)', color: '#9B8E84' }}
+          title="Remove photo"
+        >
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
       <div className="p-2.5 space-y-1.5">
         {photo.items.map(item => (
@@ -315,6 +325,12 @@ export default function Wardrobe() {
     setClothes(p => p.filter(c => c.id !== id))
   }
 
+  const handleDeletePhoto = async (photo) => {
+    const filename = photo.image_url.replace('/uploads/', '')
+    await axios.delete(`${API}/api/clothes/photo/${filename}`)
+    setClothes(p => p.filter(c => c.image_url !== photo.image_url))
+  }
+
   const handleFilterChange = (field, value) => {
     const f = { ...filters, [field]: value }
     setFilters(f)
@@ -453,6 +469,7 @@ export default function Wardrobe() {
               photo={photo}
               onEditItem={setEditingItem}
               onDeleteItem={handleDelete}
+              onDeletePhoto={handleDeletePhoto}
             />
           ))}
         </div>
@@ -521,7 +538,7 @@ export default function Wardrobe() {
                           </svg>
                         )}
                       </div>
-                      <div className="flex-1 space-y-1">
+                      <div className="flex-1 space-y-1.5" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="text-sm font-medium capitalize" style={{ color: '#2D1A0E' }}>{item.description || item.type}</p>
                           {item._dup && (
@@ -530,12 +547,36 @@ export default function Wardrobe() {
                             </span>
                           )}
                         </div>
-                        <div className="flex flex-wrap gap-1">
-                          {[item.type, item.color, item.fit].filter(Boolean).map((tag, t) => (
-                            <span key={t} className="text-xs px-2 py-0.5 rounded-full border capitalize" style={{ borderColor: '#E3D9CE', color: '#9B8E84' }}>
-                              {tag}
-                            </span>
-                          ))}
+                        {/* Inline type + subtype correction — always editable */}
+                        <div className="flex gap-1.5 flex-wrap">
+                          <select
+                            value={item.type || ''}
+                            onChange={e => setDetected(d => ({
+                              ...d,
+                              items: d.items.map((it, i) => i === idx ? { ...it, type: e.target.value, subtype: '' } : it),
+                            }))}
+                            className="text-xs border rounded-full px-2 py-0.5 focus:outline-none"
+                            style={{ borderColor: '#E3D9CE', color: '#4A3020', backgroundColor: '#FAF7F2' }}
+                          >
+                            {['top','bottom','dress','outerwear','shoes','accessory','jumpsuit','skirt'].map(t => (
+                              <option key={t} value={t}>{t}</option>
+                            ))}
+                          </select>
+                          {SUBTYPES[item.type]?.length > 0 && (
+                            <select
+                              value={item.subtype || ''}
+                              onChange={e => setDetected(d => ({
+                                ...d,
+                                items: d.items.map((it, i) => i === idx ? { ...it, subtype: e.target.value } : it),
+                              }))}
+                              className="text-xs border rounded-full px-2 py-0.5 focus:outline-none"
+                              style={{ borderColor: '#E3D9CE', color: '#4A3020', backgroundColor: '#FAF7F2' }}
+                            >
+                              <option value="">subtype…</option>
+                              {SUBTYPES[item.type].map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                          )}
+                          <span className="text-xs capitalize" style={{ color: '#C4B5AC' }}>{item.color}</span>
                         </div>
                       </div>
                     </button>

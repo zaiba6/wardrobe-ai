@@ -493,6 +493,21 @@ def delete_clothing(
     return {"success": True}
 
 
+@app.delete("/api/clothes/photo/{filename}")
+def delete_photo(filename: str, user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    items = db.query(ClothingItem).filter(
+        ClothingItem.filename == filename,
+        ClothingItem.user_id == user_id,
+    ).all()
+    if not items:
+        raise HTTPException(status_code=404, detail="Photo not found.")
+    for item in items:
+        db.delete(item)
+    db.commit()
+    _delete_upload_file(filename)
+    return {"success": True, "deleted": len(items)}
+
+
 # ---------------------------------------------------------------------------
 # Outfit suggestion (mood-based)
 # ---------------------------------------------------------------------------
@@ -764,8 +779,20 @@ def import_pinterest_board(
     imported: list[InspoItem] = []
     for img_url in img_urls:
         try:
-            img_resp = http_requests.get(img_url, headers=_PINTEREST_HEADERS, timeout=10)
-            if img_resp.status_code != 200:
+            # Try 736x first (already done by _upgrade_pinterest_img_url), fall back to original
+            original_url = re.sub(r'/736x/', '/236x/', img_url)  # get original low-res as fallback
+            img_download_headers = {
+                **_PINTEREST_HEADERS,
+                "Referer": "https://www.pinterest.com/",
+                "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
+            }
+            img_resp = None
+            for try_url in ([img_url] if img_url == original_url else [img_url, original_url]):
+                r = http_requests.get(try_url, headers=img_download_headers, timeout=12)
+                if r.status_code == 200 and r.content:
+                    img_resp = r
+                    break
+            if not img_resp:
                 continue
             content_type = img_resp.headers.get("Content-Type", "image/jpeg")
             ext = ".jpg" if "jpeg" in content_type else ".png" if "png" in content_type else ".jpg"

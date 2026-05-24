@@ -121,12 +121,22 @@ def detect_all_items(image_path: str) -> list[dict]:
                     {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": image_data}},
                     {"type": "text", "text": (
                         "Analyze this fashion photo and identify ALL visible clothing items and accessories.\n"
-                        "IMPORTANT: Only include wearable fashion items. Do NOT include phones, iPhones, electronics, mirrors, furniture, or any non-clothing objects — even if held or visible in the photo.\n"
+                        "IMPORTANT: Only include wearable fashion items. Do NOT include phones, iPhones, electronics, mirrors, furniture, or any non-clothing objects.\n\n"
                         "For each item return a JSON object with:\n"
                         '- "type": one of [top, bottom, dress, outerwear, shoes, accessory, jumpsuit, skirt]\n'
-                        '- "subtype": specific subcategory (e.g. crop top, midi skirt, ankle boots, jeans, going out dress)\n'
+                        '- "subtype": MUST use the most specific matching term:\n'
+                        '    top → [tank top, crop top, t-shirt, blouse, going out top, button-down, sweater, hoodie, bodysuit, corset top]\n'
+                        '    bottom → [jeans, trousers, shorts, leggings, sweatpants, cargo pants]\n'
+                        '    skirt → [mini skirt, midi skirt, maxi skirt, pleated skirt, denim skirt, slip skirt]\n'
+                        '    dress → [mini dress, midi dress, maxi dress, bodycon dress, slip dress, sundress, going out dress, wrap dress]\n'
+                        '    outerwear → [leather jacket, denim jacket, blazer, coat, trench coat, puffer jacket, cardigan, bomber jacket]\n'
+                        '    shoes → [sneakers, ankle boots, boots, knee-high boots, heels, sandals, loafers, flats, platform shoes, mules]\n'
+                        '    accessory → [bag, belt, hat, sunglasses, jewelry, scarf, watch]\n'
+                        '    jumpsuit → [jumpsuit, romper, playsuit]\n'
+                        "  KEY RULES: a sleeveless top with straps = 'tank top', never 'oversized shirt'. A short-length top = 'crop top'. "
+                        "  Choose subtype by the garment's silhouette and cut, not just by how it fits the wearer.\n"
                         '- "color": color description\n'
-                        '- "fit": one of [loose, oversized, regular, fitted, bodycon]\n'
+                        '- "fit": one of [loose, oversized, regular, fitted, bodycon] — how it fits THE WEARER, not the garment style\n'
                         '- "formality": one of [casual, smart-casual, formal]\n'
                         '- "season": one of [all-season, spring-summer, fall-winter]\n'
                         '- "description": a short label max 5 words, e.g. "black high-waist straight jeans"\n\n'
