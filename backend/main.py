@@ -743,8 +743,21 @@ def import_pinterest_board(
     url = body.board_url.strip()
     if not url.startswith("http"):
         url = "https://" + url
+
+    # Resolve pin.it short URLs to full pinterest.com URLs
+    if "pin.it" in url:
+        try:
+            redir = http_requests.get(url, headers=_PINTEREST_HEADERS, timeout=10, allow_redirects=True)
+            url = str(redir.url)
+        except Exception:
+            raise HTTPException(status_code=502, detail="Could not resolve Pinterest short URL — check your connection.")
+
     if "pinterest.com" not in url:
-        raise HTTPException(status_code=400, detail="Please enter a valid Pinterest board URL.")
+        raise HTTPException(status_code=400, detail="Please enter a valid Pinterest board URL (e.g. pinterest.com/username/board-name/).")
+
+    # pin.it links may resolve to a single pin page rather than a board
+    if re.search(r"pinterest\.com/pin/", url):
+        raise HTTPException(status_code=400, detail="That link points to a single pin, not a board. Please share a board URL (pinterest.com/username/board-name/).")
 
     rss_url = url.rstrip("/") + "/rss/"
     try:

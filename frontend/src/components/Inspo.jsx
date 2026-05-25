@@ -184,21 +184,28 @@ export default function Inspo() {
     setImportMsg(null)
     setImportProgress({ current: 0, total: toImport.length, count: 0 })
     let totalImported = 0
+    const errors = []
     for (let i = 0; i < toImport.length; i++) {
       setImportProgress({ current: i + 1, total: toImport.length, count: totalImported })
       try {
         const res = await axios.post(`${API}/api/inspo/import-pinterest`, { board_url: toImport[i] })
         setInspoItems(p => [...res.data.items, ...p])
         totalImported += res.data.imported
-      } catch {
-        // skip failed board, continue
+      } catch (err) {
+        const msg = err?.response?.data?.detail || 'Could not import board'
+        errors.push(msg)
       }
     }
     fetchRecs()
     setPinterestUrl('')
     setBoardList([])
     setImportProgress(null)
-    setImportMsg({ ok: true, text: `imported ${totalImported} pins from ${toImport.length} board${toImport.length > 1 ? 's' : ''} ✦` })
+    if (totalImported > 0) {
+      const errSuffix = errors.length ? ` (${errors.length} failed)` : ''
+      setImportMsg({ ok: true, text: `imported ${totalImported} pin${totalImported !== 1 ? 's' : ''} from ${toImport.length - errors.length} board${toImport.length - errors.length !== 1 ? 's' : ''} ✦${errSuffix}` })
+    } else {
+      setImportMsg({ ok: false, text: errors[0] || 'No images could be imported from this board.' })
+    }
     setImporting(false)
   }
 
