@@ -746,9 +746,23 @@ def import_pinterest_board(
 
     # Resolve pin.it short URLs to full pinterest.com URLs
     if "pin.it" in url:
+        browser_headers = {
+            "User-Agent": _PINTEREST_HEADERS["User-Agent"],
+            "Accept": "text/html,application/xhtml+xml,*/*;q=0.9",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
         try:
-            redir = http_requests.get(url, headers=_PINTEREST_HEADERS, timeout=10, allow_redirects=True)
-            url = str(redir.url)
+            redir = http_requests.get(url, headers=browser_headers, timeout=10, allow_redirects=True)
+            resolved = str(redir.url)
+            if "pinterest.com" in resolved:
+                url = resolved
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Could not follow that Pinterest short link. Open the board in Pinterest and copy the full URL from your browser's address bar (e.g. pinterest.com/you/board-name/).",
+                )
+        except HTTPException:
+            raise
         except Exception:
             raise HTTPException(status_code=502, detail="Could not resolve Pinterest short URL — check your connection.")
 
@@ -765,10 +779,15 @@ def import_pinterest_board(
     except Exception:
         raise HTTPException(status_code=502, detail="Could not reach Pinterest — check your connection.")
 
+    if resp.status_code == 403:
+        raise HTTPException(
+            status_code=400,
+            detail="Pinterest blocked the import (403). Make sure the board is public. If the problem persists, try the Chrome extension to save pins directly instead.",
+        )
     if resp.status_code != 200:
         raise HTTPException(
             status_code=400,
-            detail=f"Pinterest returned {resp.status_code}. Make sure the board is public and the URL is correct.",
+            detail=f"Pinterest returned {resp.status_code}. Make sure the board is public and the URL looks like pinterest.com/username/board-name/.",
         )
 
     try:

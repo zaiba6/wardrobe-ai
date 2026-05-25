@@ -293,7 +293,7 @@ export default function Inspo() {
           </svg>
           <p className="text-sm font-medium" style={{ color: '#2D1A0E' }}>link a Pinterest board</p>
         </div>
-        <p className="text-xs" style={{ color: '#9B8E84' }}>paste public board URLs — we'll pull the pins and analyze your style</p>
+        <p className="text-xs" style={{ color: '#9B8E84' }}>paste a public board URL or pin.it link — we'll pull the pins and analyze your style</p>
 
         {/* URL input row */}
         <div className="flex gap-2">
@@ -302,7 +302,7 @@ export default function Inspo() {
             value={pinterestUrl}
             onChange={e => { setPinterestUrl(e.target.value); setImportMsg(null) }}
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); boardList.length >= 0 ? addBoard() : handlePinterestImport() } }}
-            placeholder="https://www.pinterest.com/you/your-board/"
+            placeholder="pinterest.com/you/board  or  pin.it/..."
             className="flex-1 border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#8B1A1A]"
             style={{ borderColor: '#E3D9CE', color: '#2D1A0E', backgroundColor: '#FAF7F2' }}
             disabled={importing}
