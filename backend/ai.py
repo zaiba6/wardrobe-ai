@@ -6,6 +6,7 @@ from pathlib import Path
 import anthropic
 from dotenv import load_dotenv
 from taxonomy import normalize_clothing_tags
+from fashion_rules import get_rules_for_prompt
 
 load_dotenv()
 
@@ -275,23 +276,28 @@ def suggest_personalized_outfit(
     inspo_line   = f"User's personal style from their inspo board:\n{inspo_context}\n\n" if inspo_context else ""
     occasion_line = f"Occasion: {occasion}.\n" if occasion else ""
 
+    rules = get_rules_for_prompt(occasion)
+
     prompt = (
         "You are a personal stylist who knows this user's taste.\n\n"
         f"{inspo_line}"
         f"How they're feeling today: {mood}.\n"
         f"{occasion_line}"
         f"Current weather: {temp_c}°C ({temp_f}°F), {condition}.\n\n"
-        "Styling rules:\n"
+        f"{rules}\n\n"
+        "Additional styling guidance:\n"
         "- Match the inspo aesthetic as closely as possible using what they own.\n"
         "- Take the mood literally: 'bloated', 'uncomfortable', 'tired' → loose, oversized, flowy fits. "
         "'Confident', 'sexy', 'powerful' → fitted, bodycon. 'Cozy', 'comfy' → soft, relaxed.\n"
         "- Weather: below 15°C → include outerwear. 15–20°C → skip outerwear but tell them to bring a light layer for later in the reason. Above 20°C → no outerwear.\n"
         "- Always include top + bottom OR dress/jumpsuit. Add shoes if available. Add an accessory if it completes the look.\n"
+        "- If the occasion rules say a top needs a layer (blazer/cardigan), you MUST include one from the wardrobe — if none is available, pick a different top.\n"
         "- Do NOT repeat any item IDs from a previous outfit the user already saw.\n\n"
         f"Wardrobe (only pick from these):\n{wardrobe_text}\n\n"
         "Return JSON with:\n"
         '- "item_ids": array of integer IDs\n'
         '- "reason": 1–2 warm, friendly sentences — why this matches their vibe and mood. '
+        "If the outfit needed a layer due to occasion rules, mention it naturally. "
         "If 15–20°C, add a note to bring a light layer for the evening.\n"
         "Return ONLY valid JSON. No markdown."
     )
@@ -338,13 +344,17 @@ def suggest_vibe_outfit(
     condition = weather["description"]
     mood_line = f"Mood: {mood}.\n" if mood else ""
 
+    rules = get_rules_for_prompt(vibe)
+
     prompt = (
         f'You are a personal stylist. Create an outfit for: "{vibe}".\n'
         f"Weather: {temp_c}°C ({temp_f}°F), {condition}.\n"
-        f"{mood_line}"
-        f"\nWardrobe:\n{wardrobe_text}\n\n"
+        f"{mood_line}\n"
+        f"{rules}\n\n"
+        f"Wardrobe:\n{wardrobe_text}\n\n"
         "Pick a complete, weather-appropriate outfit. Include a top + bottom OR a dress/jumpsuit. "
         "Add outerwear if temp < 18°C. Add shoes and/or an accessory if available.\n"
+        "Respect the fashion rules above — e.g. for work vibes, no strapless unless layered.\n"
         "Return JSON with:\n"
         '- "item_ids": array of integer item IDs (only IDs from the list above)\n'
         '- "reason": one friendly sentence explaining this outfit for the vibe and weather\n'
