@@ -254,6 +254,7 @@ def suggest_personalized_outfit(
     occasion: str | None,
     weather: dict,
     exclude_ids: list[int] | None = None,
+    bad_combos: list[list[str]] | None = None,
 ) -> tuple[list[int], str]:
     """Pick one outfit using Claude, informed by the user's inspo aesthetic and mood."""
     if not wardrobe_items:
@@ -278,12 +279,21 @@ def suggest_personalized_outfit(
 
     rules = get_rules_for_prompt(occasion)
 
+    bad_combos_line = ""
+    if bad_combos:
+        formatted = "\n".join(f"  - {', '.join(combo)}" for combo in bad_combos[:15])
+        bad_combos_line = (
+            "The user has previously rejected these outfit combinations — do NOT recreate them:\n"
+            f"{formatted}\n\n"
+        )
+
     prompt = (
         "You are a personal stylist who knows this user's taste.\n\n"
         f"{inspo_line}"
         f"How they're feeling today: {mood}.\n"
         f"{occasion_line}"
         f"Current weather: {temp_c}°C ({temp_f}°F), {condition}.\n\n"
+        f"{bad_combos_line}"
         f"{rules}\n\n"
         "Additional styling guidance:\n"
         "- Match the inspo aesthetic as closely as possible using what they own.\n"

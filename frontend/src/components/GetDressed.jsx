@@ -89,7 +89,7 @@ function EmptyOutfit() {
   )
 }
 
-function OutfitCard({ outfit, mood, occasion, weather, onRefresh, refreshing }) {
+function OutfitCard({ outfit, mood, occasion, weather, onRefresh, onBadRec, refreshing }) {
   const [saved, setSaved]   = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -130,6 +130,15 @@ function OutfitCard({ outfit, mood, occasion, weather, onRefresh, refreshing }) 
         >
           {refreshing && <span className="w-2.5 h-2.5 rounded-full border border-[#E3D9CE] border-t-[#8B1A1A] animate-spin inline-block" />}
           {refreshing ? 'finding another…' : 'try another →'}
+        </button>
+        <button
+          onClick={onBadRec}
+          disabled={refreshing}
+          className="text-xs rounded-full px-4 py-1.5 border transition-all disabled:opacity-60 flex items-center gap-1.5"
+          style={{ borderColor: '#E8CECE', color: '#8B1A1A', backgroundColor: '#FDF5F5' }}
+          title="Tell the algo this combo doesn't work"
+        >
+          👎 bad rec
         </button>
       </div>
     </div>
@@ -210,6 +219,19 @@ export default function GetDressed() {
     } finally {
       setRefreshing(false)
     }
+  }
+
+  const handleBadRec = async () => {
+    if (!result?.outfit?.items?.length) return
+    const currentIds = result.outfit.items.map(i => i.id)
+    // Fire-and-forget the feedback — don't block the refresh
+    axios.post(`${API}/api/outfit/feedback`, {
+      item_ids: currentIds,
+      occasion: occasion || null,
+      feedback: 'bad',
+    }).catch(() => {})
+    // Then refresh like normal but exclude these items too
+    handleRefresh()
   }
 
   const hasOutfit = result?.outfit?.items?.length > 0
@@ -372,6 +394,7 @@ export default function GetDressed() {
               occasion={occasion}
               weather={result.weather}
               onRefresh={handleRefresh}
+              onBadRec={handleBadRec}
               refreshing={refreshing}
             />
           ) : (

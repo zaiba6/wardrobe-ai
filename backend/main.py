@@ -28,7 +28,7 @@ from auth import (
     get_or_create_user,
 )
 from database import Base, engine, get_db
-from models import ClothingItem, InspoItem, OutfitLog, User
+from models import ClothingItem, InspoItem, OutfitLog, OutfitFeedback, User
 from weather import get_weather, get_weather_by_coords
 
 load_dotenv()
@@ -42,6 +42,7 @@ _MIGRATIONS = [
     "ALTER TABLE clothing_items ADD COLUMN subtype VARCHAR",
     "ALTER TABLE clothing_items ADD COLUMN user_id INTEGER",
     "ALTER TABLE inspo_items    ADD COLUMN user_id INTEGER",
+    "CREATE TABLE IF NOT EXISTS outfit_feedback (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, item_ids TEXT NOT NULL, item_descs TEXT, occasion VARCHAR, feedback VARCHAR DEFAULT 'bad', created_at DATETIME DEFAULT CURRENT_TIMESTAMP)",
 ]
 with engine.connect() as _conn:
     for _stmt in _MIGRATIONS:
@@ -289,6 +290,12 @@ class InspoOutfitBody(BaseModel):
     mood:      Optional[str]   = None
 
 
+class OutfitFeedbackBody(BaseModel):
+    item_ids:  list[int]
+    occasion:  Optional[str] = None
+    feedback:  str           = "bad"   # "bad" | "loved"
+
+
 # ===========================================================================
 # Routes
 # ===========================================================================
@@ -502,6 +509,23 @@ def delete_photo(filename: str, user_id: int = Depends(get_current_user_id), db:
 # Outfit suggestion (mood-based)
 # ---------------------------------------------------------------------------
 
+@app.post("/api/outfit/feedback")
+def outfit_feedback(body: OutfitFeedbackBody, user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    """Store a thumbs-down (or thumbs-up) on an outfit so future suggestions avoid it."""
+    # Build human-readable descriptions for the rejected items
+    items = db.query(ClothingItem).filter(ClothingItem.id.in_(body.item_ids)).all()
+    descs = [f"{i.color} {i.subtype or i.type}" for i in items]
+    fb = OutfitFeedback(
+        user_id=user_id,
+        item_ids=json.dumps(body.item_ids),
+        item_descs=json.dumps(descs),
+        occasion=body.occasion,
+        feedback=body.feedback,
+    )
+    db.add(fb); db.commit()
+    return {"success": True}
+
+
 @app.post("/api/outfit/suggest")
 def suggest_outfit(body: OutfitSuggestBody, user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
     weather     = _resolve_weather(body.city, body.lat, body.lon)
@@ -513,7 +537,14 @@ def suggest_outfit(body: OutfitSuggestBody, user_id: int = Depends(get_current_u
     inspo_items   = db.query(InspoItem).filter(InspoItem.user_id == user_id).all()
     inspo_context = "; ".join(
         it.style_notes for it in inspo_items if it.style_notes
-    )[:2000]  # cap to avoid huge prompts
+    )[:2000]
+
+    # Load recent bad recs so Claude can avoid those combos
+    bad_recs = db.query(OutfitFeedback).filter(
+        OutfitFeedback.user_id == user_id,
+        OutfitFeedback.feedback == "bad",
+    ).order_by(OutfitFeedback.created_at.desc()).limit(30).all()
+    bad_combos = [json.loads(r.item_descs) for r in bad_recs if r.item_descs]
 
     wardrobe_summary = [
         {"id": c.id, "type": c.type, "subtype": c.subtype, "color": c.color,
@@ -531,6 +562,7 @@ def suggest_outfit(body: OutfitSuggestBody, user_id: int = Depends(get_current_u
             occasion=body.occasion,
             weather=weather,
             exclude_ids=body.exclude_ids,
+            bad_combos=bad_combos,
         )
         id_order = {iid: idx for idx, iid in enumerate(item_ids)}
         selected = sorted(

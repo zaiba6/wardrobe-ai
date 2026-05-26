@@ -43,6 +43,18 @@ class InspoItem(Base):
     created_at     = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class OutfitFeedback(Base):
+    __tablename__ = "outfit_feedback"
+
+    id         = Column(Integer, primary_key=True, index=True)
+    user_id    = Column(Integer, nullable=False, index=True)
+    item_ids   = Column(Text, nullable=False)   # JSON list of clothing item IDs
+    item_descs = Column(Text, nullable=True)    # JSON list of human-readable descriptions
+    occasion   = Column(String, nullable=True)
+    feedback   = Column(String, default="bad")  # "bad" or "loved"
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class OutfitLog(Base):
     __tablename__ = "outfit_logs"
 

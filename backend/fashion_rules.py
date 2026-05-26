@@ -91,6 +91,17 @@ GENERAL styling rules (always apply):
 - If the wardrobe has a blazer or cardigan available and the top is borderline (strapless, sleeveless), prefer adding the layer
 - Do not combine gym/activewear pieces with non-activewear in the same outfit
 
+ONE TOP RULE:
+- An outfit may only contain ONE top (tank top, t-shirt, blouse, crop top, going-out top, bodysuit, etc.)
+- A layer must be OUTERWEAR (blazer, jacket, cardigan, coat) — never a second top
+- If you are tempted to add a second top as a layer, replace it with a blazer or cardigan from the wardrobe instead
+
+OCCASION-FORMALITY MATCHING:
+- For going-out / night-out: strongly prefer items tagged formality="casual" or items with subtypes like going-out top, going-out dress, bodycon, slip dress, mini skirt — NOT sporty/athletic mini skirts or casual daytime pieces
+- Assess the VIBE of each item from its description and color: a sporty black mini skirt is not the same as a dressy mini skirt even if both are tagged "mini skirt"
+- For work: prefer items tagged formality="smart-casual" or "formal"
+- If a casual-tagged item is the only option, pick it — but flag it in the reason
+
 RULE OF THREE (colour & accessories):
 - An outfit should have no more than 3 distinct colours total (including shoes and bags)
 - If the clothing items (top + bottom / dress) already feature 2 or more colours, accessories (bag, belt, jewellery, hat) must all be ONE cohesive colour — preferably a neutral (black, white, tan/nude, camel, grey) or a colour already present in the outfit
