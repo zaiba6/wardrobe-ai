@@ -766,24 +766,58 @@ def _fetch_pinterest_rss(board_url: str) -> bytes:
     )
 
 
+def _resolve_pinterest_url(raw: str) -> str:
+    """
+    Accept any of:
+      - pin.it shortlinks  (e.g. https://pin.it/VmcyIJRkR)
+      - Any country Pinterest domain  (pinterest.ca, pinterest.co.uk, …)
+      - Standard pinterest.com board URLs
+    Returns a canonical https://www.pinterest.com/user/board/ URL (no query params).
+    Raises HTTPException on invalid input.
+    """
+    url = raw.strip()
+    if not url.startswith("http"):
+        url = "https://" + url
+
+    # Resolve pin.it shortlinks by following redirects
+    if "pin.it" in url:
+        try:
+            r = http_requests.get(url, headers=_PINTEREST_HEADERS, timeout=10, allow_redirects=True)
+            url = r.url  # final URL after all redirects
+        except Exception:
+            raise HTTPException(status_code=502, detail="Could not resolve the pin.it shortlink — check your connection.")
+
+    # Strip query params (invite codes, UTM, etc.)
+    url = url.split("?")[0].rstrip("/")
+
+    # Accept any pinterest.* country domain and normalise to www.pinterest.com
+    url = re.sub(r"https?://(?:www\.)?pinterest\.[a-z.]+", "https://www.pinterest.com", url)
+
+    if "pinterest.com" not in url:
+        raise HTTPException(status_code=400, detail="Please enter a Pinterest board URL or a pin.it shortlink.")
+
+    # Validate it's a board URL (must have /username/boardname/)
+    path = url.replace("https://www.pinterest.com", "").strip("/")
+    parts = [p for p in path.split("/") if p]
+    if len(parts) < 2 or parts[0] == "pin":
+        raise HTTPException(
+            status_code=400,
+            detail="That looks like a pin or profile URL, not a board. Open the board in Pinterest, copy the URL from the address bar, and paste it here.",
+        )
+
+    return url
+
+
 @app.post("/api/inspo/import-pinterest")
 def import_pinterest_board(
     body:    PinterestImportBody,
     user_id: int     = Depends(get_current_user_id),
     db:      Session = Depends(get_db),
 ):
-    url = body.board_url.strip()
-    if not url.startswith("http"):
-        url = "https://" + url
-    # Normalise pinterest.com → www.pinterest.com
-    url = re.sub(r"https?://(?:www\.)?pinterest\.com", "https://www.pinterest.com", url)
-    if "pinterest.com" not in url:
-        raise HTTPException(status_code=400, detail="Please enter a valid Pinterest board URL (e.g. https://www.pinterest.com/you/your-board/).")
-
-    # Boards must have at least /username/boardname/ — reject profile or pin URLs
-    path_parts = [p for p in url.split("/") if p and "pinterest" not in p and "http" not in p and p not in ("www","com")]
-    if len(path_parts) < 2:
-        raise HTTPException(status_code=400, detail="That looks like a profile or pin URL. Paste a specific board URL, e.g. https://www.pinterest.com/you/my-board/")
+    try:
+        url = _resolve_pinterest_url(body.board_url)
+    except HTTPException:
+        raise
 
     try:
         rss_bytes = _fetch_pinterest_rss(url)
