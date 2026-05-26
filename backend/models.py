@@ -40,6 +40,7 @@ class InspoItem(Base):
     filename       = Column(String, nullable=False)
     items_detected = Column(Text, nullable=True)
     style_notes    = Column(Text, nullable=True)
+    source_url     = Column(String, nullable=True, index=True)  # original Pinterest CDN URL
     created_at     = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 

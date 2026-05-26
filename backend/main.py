@@ -42,6 +42,7 @@ _MIGRATIONS = [
     "ALTER TABLE clothing_items ADD COLUMN subtype VARCHAR",
     "ALTER TABLE clothing_items ADD COLUMN user_id INTEGER",
     "ALTER TABLE inspo_items    ADD COLUMN user_id INTEGER",
+    "ALTER TABLE inspo_items    ADD COLUMN source_url VARCHAR",
     "CREATE TABLE IF NOT EXISTS outfit_feedback (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, item_ids TEXT NOT NULL, item_descs TEXT, occasion VARCHAR, feedback VARCHAR DEFAULT 'bad', created_at DATETIME DEFAULT CURRENT_TIMESTAMP)",
 ]
 with engine.connect() as _conn:
@@ -868,14 +869,29 @@ def import_pinterest_board(
     if not img_urls:
         raise HTTPException(status_code=400, detail="No pin images found in this board. It may be empty, private, or the URL isn't a board.")
 
+    # Build a set of source URLs already imported by this user so we skip duplicates
+    existing_urls: set[str] = {
+        row.source_url
+        for row in db.query(InspoItem.source_url)
+                      .filter(InspoItem.user_id == user_id, InspoItem.source_url.isnot(None))
+                      .all()
+        if row.source_url
+    }
+
     imported: list[InspoItem] = []
+    skipped = 0
     for img_url in img_urls:
+        # Normalise to the canonical 736x URL for dedup comparison
+        canonical_url = _upgrade_pinterest_img_url(img_url)
+        if canonical_url in existing_urls:
+            skipped += 1
+            continue
         try:
-            fallback_url = re.sub(r'/736x/', '/236x/', img_url)
+            fallback_url = re.sub(r'/736x/', '/236x/', canonical_url)
             img_resp = None
-            for try_url in ([img_url] if img_url == fallback_url else [img_url, fallback_url]):
+            for try_url in ([canonical_url] if canonical_url == fallback_url else [canonical_url, fallback_url]):
                 r = http_requests.get(try_url, headers=_IMG_DL_HEADERS, timeout=12, allow_redirects=True)
-                if r.status_code == 200 and len(r.content) > 1024:  # ignore tiny/broken images
+                if r.status_code == 200 and len(r.content) > 1024:
                     img_resp = r
                     break
             if not img_resp:
@@ -891,20 +907,24 @@ def import_pinterest_board(
                 filename=filename,
                 items_detected=json.dumps(result.get("items", [])),
                 style_notes=result.get("style_notes", ""),
+                source_url=canonical_url,
             )
             db.add(item)
             imported.append(item)
+            existing_urls.add(canonical_url)  # prevent intra-batch dupes too
         except Exception:
             continue
 
-    if not imported:
+    if not imported and skipped == 0:
         raise HTTPException(status_code=400, detail="Fetched the feed but couldn't download the pin images. Pinterest may be blocking the server — try again or upload screenshots manually.")
+    if not imported and skipped > 0:
+        raise HTTPException(status_code=400, detail=f"All {skipped} pins from this board are already in your inspo board.")
 
     db.commit()
     for item in imported:
         db.refresh(item)
 
-    return {"imported": len(imported), "items": [serialize_inspo(i) for i in imported]}
+    return {"imported": len(imported), "skipped": skipped, "items": [serialize_inspo(i) for i in imported]}
 
 
 # ---------------------------------------------------------------------------

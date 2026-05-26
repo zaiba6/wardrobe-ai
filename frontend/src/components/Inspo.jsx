@@ -188,6 +188,7 @@ export default function Inspo() {
     setImportMsg(null)
     setImportProgress({ current: 0, total: toImport.length, count: 0 })
     let totalImported = 0
+    let totalSkipped = 0
     let lastError = null
     for (let i = 0; i < toImport.length; i++) {
       setImportProgress({ current: i + 1, total: toImport.length, count: totalImported })
@@ -195,6 +196,7 @@ export default function Inspo() {
         const res = await axios.post(`${API}/api/inspo/import-pinterest`, { board_url: toImport[i] })
         setInspoItems(p => [...res.data.items, ...p])
         totalImported += res.data.imported
+        totalSkipped  += res.data.skipped ?? 0
       } catch (err) {
         lastError = err.response?.data?.detail || 'Could not import this board'
       }
@@ -204,9 +206,10 @@ export default function Inspo() {
     setBoardList([])
     setImportProgress(null)
     if (totalImported > 0) {
-      setImportMsg({ ok: true, text: `imported ${totalImported} pins from ${toImport.length} board${toImport.length > 1 ? 's' : ''} ✦` })
+      const skipNote = totalSkipped > 0 ? ` (${totalSkipped} already saved, skipped)` : ''
+      setImportMsg({ ok: true, text: `imported ${totalImported} new pins${skipNote} ✦` })
     } else {
-      setImportMsg({ ok: false, text: lastError || 'No pins imported — make sure the board is public' })
+      setImportMsg({ ok: false, text: lastError || 'No new pins found — already imported or board is private' })
     }
     setImporting(false)
   }
