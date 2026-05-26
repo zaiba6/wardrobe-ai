@@ -90,6 +90,15 @@ GENERAL styling rules (always apply):
 - A blazer is the most versatile piece — it elevates any look and solves most "too casual" problems
 - If the wardrobe has a blazer or cardigan available and the top is borderline (strapless, sleeveless), prefer adding the layer
 - Do not combine gym/activewear pieces with non-activewear in the same outfit
+
+RULE OF THREE (colour & accessories):
+- An outfit should have no more than 3 distinct colours total (including shoes and bags)
+- If the clothing items (top + bottom / dress) already feature 2 or more colours, accessories (bag, belt, jewellery, hat) must all be ONE cohesive colour — preferably a neutral (black, white, tan/nude, camel, grey) or a colour already present in the outfit
+- If the outfit is monochromatic (one colour family throughout), a single statement accessory in a contrasting or complementary colour adds interest — but still only one accent colour
+- Neutral colours (black, white, navy, grey, camel, tan, cream) do not count towards the 3-colour limit — they always work as accessories
+- Metals count as neutrals: gold and silver accessories can be added freely, but do not mix gold and silver in the same outfit
+- Prints count as 2 colours — pick accessories in one of the colours already in the print, not a third unrelated colour
+- The goal: if the clothes are the statement, keep accessories quiet; if the clothes are simple, let one accessory shine
 """
 
 # ---------------------------------------------------------------------------
