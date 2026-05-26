@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import axios from 'axios'
 import ClothesLoader from './ClothesLoader'
 
@@ -20,20 +20,20 @@ async function saveOutfitLog({ items, mood, occasion, weather }) {
   }
 }
 
+const BUILT_IN_OCCASIONS = [
+  { label: 'work',       value: 'office look, business casual, polished — no jeans, no sneakers' },
+  { label: 'date night', value: 'date night, romantic and elegant, slightly dressed up' },
+  { label: 'going out',  value: 'night out, going out, fun and confident, statement look' },
+  { label: 'weekend',    value: 'casual weekend, comfy but cute, running errands' },
+  { label: 'gym',        value: 'gym day, athletic, sporty and functional' },
+]
+
 const MOODS = [
   { key: 'Comfy',        label: 'comfy',         sub: 'loose & cozy',      emoji: '🫂' },
   { key: 'Casual',       label: 'casual',        sub: 'everyday ease',     emoji: '👟' },
   { key: 'Confident',    label: 'confident',     sub: 'show it off',       emoji: '💃' },
   { key: 'Flowy',        label: 'flowy',         sub: 'dreamy & soft',     emoji: '🌸' },
   { key: 'Put-together', label: 'put-together',  sub: 'polished look',     emoji: '✨' },
-]
-
-const PRESET_OCCASIONS = [
-  { label: 'work',       value: 'office look, business casual, polished — no jeans, no sneakers' },
-  { label: 'date night', value: 'date night, romantic and elegant, slightly dressed up' },
-  { label: 'going out',  value: 'night out, going out, fun and confident, statement look' },
-  { label: 'weekend',    value: 'casual weekend, comfy but cute, running errands' },
-  { label: 'gym',        value: 'gym day, athletic, sporty and functional' },
 ]
 
 function weatherEmoji(condition) {
@@ -134,9 +134,8 @@ function OutfitCard({ outfit, mood, occasion, weather, onRefresh, onBadRec, refr
         <button
           onClick={onBadRec}
           disabled={refreshing}
-          className="text-xs rounded-full px-4 py-1.5 border transition-all disabled:opacity-60 flex items-center gap-1.5"
+          className="text-xs rounded-full px-4 py-1.5 border transition-all disabled:opacity-60"
           style={{ borderColor: '#E8CECE', color: '#8B1A1A', backgroundColor: '#FDF5F5' }}
-          title="Tell the algo this combo doesn't work"
         >
           👎 bad rec
         </button>
@@ -146,21 +145,50 @@ function OutfitCard({ outfit, mood, occasion, weather, onRefresh, onBadRec, refr
 }
 
 export default function GetDressed() {
-  const [occasion, setOccasion] = useState('')
-  const [moodKey, setMoodKey]   = useState(null)
-  const [moodText, setMoodText] = useState('')
-  const [city, setCity]         = useState('')
-  const [coords, setCoords]     = useState(null)
-  const [locating, setLocating] = useState(false)
-  const [result, setResult]     = useState(null)
-  const [loading, setLoading]   = useState(false)
+  const [occasion, setOccasion]   = useState('')
+  const [moodKey, setMoodKey]     = useState(null)
+  const [moodText, setMoodText]   = useState('')
+  const [city, setCity]           = useState('')
+  const [coords, setCoords]       = useState(null)
+  const [locating, setLocating]   = useState(false)
+  const [result, setResult]       = useState(null)
+  const [loading, setLoading]     = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [error, setError]       = useState('')
+  const [error, setError]         = useState('')
   const [excludeIds, setExcludeIds] = useState([])
+
+  // Saved presets
+  const [savedPresets, setSavedPresets]   = useState([])
+  const [savingPreset, setSavingPreset]   = useState(false)
+  const [presetLabelInput, setPresetLabelInput] = useState('')
+  const [showPresetSave, setShowPresetSave] = useState(false)
 
   const mood        = moodText.trim() || moodKey
   const hasLocation = coords !== null || city.trim().length > 0
   const canSubmit   = mood && hasLocation && !loading && !refreshing
+
+  // Load saved presets on mount
+  useEffect(() => {
+    axios.get(`${API}/api/presets`).then(r => setSavedPresets(r.data)).catch(() => {})
+  }, [])
+
+  const handleSavePreset = async () => {
+    const label = presetLabelInput.trim() || occasion.split(',')[0].trim()
+    if (!label || !occasion.trim()) return
+    setSavingPreset(true)
+    try {
+      const res = await axios.post(`${API}/api/presets`, { label, occasion: occasion.trim() })
+      setSavedPresets(p => [...p, res.data])
+      setShowPresetSave(false)
+      setPresetLabelInput('')
+    } catch {}
+    setSavingPreset(false)
+  }
+
+  const handleDeletePreset = async (id) => {
+    await axios.delete(`${API}/api/presets/${id}`).catch(() => {})
+    setSavedPresets(p => p.filter(x => x.id !== id))
+  }
 
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
@@ -224,21 +252,23 @@ export default function GetDressed() {
   const handleBadRec = async () => {
     if (!result?.outfit?.items?.length) return
     const currentIds = result.outfit.items.map(i => i.id)
-    // Fire-and-forget the feedback — don't block the refresh
     axios.post(`${API}/api/outfit/feedback`, {
       item_ids: currentIds,
       occasion: occasion || null,
       feedback: 'bad',
     }).catch(() => {})
-    // Then refresh like normal but exclude these items too
     handleRefresh()
   }
 
   const hasOutfit = result?.outfit?.items?.length > 0
 
+  const allPresets = [
+    ...BUILT_IN_OCCASIONS,
+    ...savedPresets.map(p => ({ label: p.label, value: p.occasion, id: p.id, saved: true })),
+  ]
+
   return (
     <div className="space-y-10 max-w-2xl">
-      {/* Header */}
       <div>
         <h2 className="serif-italic text-3xl leading-snug" style={{ color: '#2D1A0E' }}>
           so, what are we wearing?
@@ -254,34 +284,81 @@ export default function GetDressed() {
           occasion <span style={{ color: '#C4B5AC', textTransform: 'none', letterSpacing: 'normal' }}>— optional</span>
         </p>
         <div className="flex gap-2 flex-wrap">
-          {PRESET_OCCASIONS.map(p => (
-            <button
-              key={p.label}
-              onClick={() => setOccasion(occasion === p.value ? '' : p.value)}
-              className="text-xs rounded-full px-3 py-1.5 border transition-all"
-              style={occasion === p.value
-                ? { backgroundColor: '#F0DADA', borderColor: '#8B1A1A', color: '#6B1010' }
-                : { backgroundColor: '#fff', borderColor: '#E3D9CE', color: '#9B8E84' }
-              }
-            >
-              {p.label}
-            </button>
+          {allPresets.map((p, i) => (
+            <div key={p.id ?? p.label} className="relative group/chip">
+              <button
+                onClick={() => setOccasion(occasion === p.value ? '' : p.value)}
+                className="text-xs rounded-full px-3 py-1.5 border transition-all"
+                style={occasion === p.value
+                  ? { backgroundColor: '#F0DADA', borderColor: '#8B1A1A', color: '#6B1010' }
+                  : { backgroundColor: '#fff', borderColor: p.saved ? '#D4C5C5' : '#E3D9CE', color: p.saved ? '#6B4040' : '#9B8E84' }
+                }
+              >
+                {p.label}{p.saved ? ' ✦' : ''}
+              </button>
+              {p.saved && (
+                <button
+                  onClick={() => handleDeletePreset(p.id)}
+                  className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-[9px] items-center justify-center hidden group-hover/chip:flex"
+                  style={{ backgroundColor: '#E3D9CE', color: '#9B8E84' }}
+                >×</button>
+              )}
+            </div>
           ))}
         </div>
-        <input
-          type="text"
-          value={occasion}
-          onChange={e => setOccasion(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-          placeholder="or describe the vibe… beach day, baby shower, etc."
-          className="w-full border-b-2 bg-transparent pb-2 text-sm focus:outline-none transition-all"
-          style={{ borderColor: occasion ? '#8B1A1A' : '#E3D9CE', color: '#2D1A0E' }}
-        />
-        {occasion && (
-          <p className="text-xs" style={{ color: '#C4B5AC' }}>
-            ✦ i'll pick specific pieces from your closet for this look
-          </p>
-        )}
+
+        {/* Custom occasion input + save */}
+        <div className="space-y-2">
+          <input
+            type="text"
+            value={occasion}
+            onChange={e => { setOccasion(e.target.value); setShowPresetSave(false) }}
+            onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+            placeholder="or describe the vibe… beach day, baby shower, etc."
+            className="w-full border-b-2 bg-transparent pb-2 text-sm focus:outline-none transition-all"
+            style={{ borderColor: occasion ? '#8B1A1A' : '#E3D9CE', color: '#2D1A0E' }}
+          />
+          {occasion && !BUILT_IN_OCCASIONS.find(p => p.value === occasion) && !savedPresets.find(p => p.occasion === occasion) && (
+            <div className="flex items-center gap-2">
+              {!showPresetSave ? (
+                <button
+                  onClick={() => { setShowPresetSave(true); setPresetLabelInput(occasion.split(',')[0].trim().slice(0, 20)) }}
+                  className="text-[11px] rounded-full px-3 py-1 border transition-all"
+                  style={{ borderColor: '#E3D9CE', color: '#9B8E84' }}
+                >
+                  + save as preset
+                </button>
+              ) : (
+                <div className="flex items-center gap-2 flex-1">
+                  <input
+                    autoFocus
+                    value={presetLabelInput}
+                    onChange={e => setPresetLabelInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleSavePreset(); if (e.key === 'Escape') setShowPresetSave(false) }}
+                    placeholder="give it a name…"
+                    className="flex-1 text-xs border-b bg-transparent pb-1 focus:outline-none"
+                    style={{ borderColor: '#8B1A1A', color: '#2D1A0E' }}
+                    maxLength={24}
+                  />
+                  <button
+                    onClick={handleSavePreset}
+                    disabled={savingPreset || !presetLabelInput.trim()}
+                    className="text-xs rounded-full px-3 py-1 border transition-all disabled:opacity-40"
+                    style={{ backgroundColor: '#2D1A0E', color: '#FAF7F2', borderColor: '#2D1A0E' }}
+                  >
+                    {savingPreset ? '…' : 'save'}
+                  </button>
+                  <button onClick={() => setShowPresetSave(false)} className="text-xs" style={{ color: '#C4B5AC' }}>cancel</button>
+                </div>
+              )}
+            </div>
+          )}
+          {occasion && (
+            <p className="text-xs" style={{ color: '#C4B5AC' }}>
+              ✦ i'll pick specific pieces from your closet for this look
+            </p>
+          )}
+        </div>
       </div>
 
       {/* 2 — Mood */}
@@ -369,21 +446,18 @@ export default function GetDressed() {
         {loading ? 'finding your look…' : 'dress me →'}
       </button>
 
-      {/* Loading state */}
       {loading && (
         <div className="flex justify-center py-8">
           <ClothesLoader label="styling your outfit…" />
         </div>
       )}
 
-      {/* Error */}
       {error && (
         <p className="text-sm rounded-xl px-4 py-3 border" style={{ color: '#6B1010', backgroundColor: '#F0DADA', borderColor: '#E8CECE' }}>
           {error}
         </p>
       )}
 
-      {/* Result */}
       {!loading && result && (
         <div className="space-y-6">
           {result.weather && <WeatherStrip weather={result.weather} />}

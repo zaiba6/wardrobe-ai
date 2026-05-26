@@ -22,6 +22,10 @@ GOOGLE_AUTH_URL  = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_INFO_URL  = "https://www.googleapis.com/oauth2/v2/userinfo"
 
+GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.readonly"
+CALENDAR_SCOPES       = f"openid email profile {GOOGLE_CALENDAR_SCOPE}"
+GOOGLE_REFRESH_URL    = "https://oauth2.googleapis.com/token"
+
 
 # ---------------------------------------------------------------------------
 # JWT helpers
@@ -72,15 +76,27 @@ def get_optional_user_id(request: Request) -> Optional[int]:
 # ---------------------------------------------------------------------------
 
 def get_or_create_user(
-    db: Session, google_id: str, email: str, name: str, picture: str
+    db: Session, google_id: str, email: str, name: str, picture: str,
+    access_token: str = None, refresh_token: str = None, token_expiry=None,
 ) -> User:
     user = db.query(User).filter(User.google_id == google_id).first()
     if user:
         user.name    = name
         user.picture = picture
+        if access_token:
+            user.google_access_token = access_token
+        if refresh_token:
+            user.google_refresh_token = refresh_token
+        if token_expiry:
+            user.google_token_expiry = token_expiry
         db.commit()
     else:
-        user = User(google_id=google_id, email=email, name=name, picture=picture)
+        user = User(
+            google_id=google_id, email=email, name=name, picture=picture,
+            google_access_token=access_token,
+            google_refresh_token=refresh_token,
+            google_token_expiry=token_expiry,
+        )
         db.add(user)
         db.commit()
         db.refresh(user)

@@ -5,6 +5,7 @@ import re
 import shutil
 import uuid
 import xml.etree.ElementTree as ET
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlencode
@@ -25,10 +26,10 @@ from auth import (
     GOOGLE_AUTH_URL, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
     GOOGLE_INFO_URL, GOOGLE_TOKEN_URL, REDIRECT_URI, APP_URL,
     create_access_token, get_current_user_id, get_optional_user_id,
-    get_or_create_user,
+    get_or_create_user, CALENDAR_SCOPES,
 )
 from database import Base, engine, get_db
-from models import ClothingItem, InspoItem, OutfitLog, OutfitFeedback, User
+from models import ClothingItem, InspoItem, OutfitLog, OutfitFeedback, User, UserPreset
 from weather import get_weather, get_weather_by_coords
 
 load_dotenv()
@@ -44,6 +45,10 @@ _MIGRATIONS = [
     "ALTER TABLE inspo_items    ADD COLUMN user_id INTEGER",
     "ALTER TABLE inspo_items    ADD COLUMN source_url VARCHAR",
     "CREATE TABLE IF NOT EXISTS outfit_feedback (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, item_ids TEXT NOT NULL, item_descs TEXT, occasion VARCHAR, feedback VARCHAR DEFAULT 'bad', created_at DATETIME DEFAULT CURRENT_TIMESTAMP)",
+    "CREATE TABLE IF NOT EXISTS user_presets (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, label VARCHAR NOT NULL, occasion TEXT NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)",
+    "ALTER TABLE users ADD COLUMN google_access_token VARCHAR",
+    "ALTER TABLE users ADD COLUMN google_refresh_token VARCHAR",
+    "ALTER TABLE users ADD COLUMN google_token_expiry DATETIME",
 ]
 with engine.connect() as _conn:
     for _stmt in _MIGRATIONS:
@@ -297,6 +302,56 @@ class OutfitFeedbackBody(BaseModel):
     feedback:  str           = "bad"   # "bad" | "loved"
 
 
+class UserPresetBody(BaseModel):
+    label:    str
+    occasion: str
+
+
+class DayPlanInput(BaseModel):
+    date:     str            # YYYY-MM-DD
+    day:      str            # "Monday" etc
+    events:   list[str] = [] # event names from Google Cal
+    occasion: Optional[str] = None  # user-typed override for empty days
+
+
+class WeekPlanBody(BaseModel):
+    days: list[DayPlanInput]
+    city: Optional[str]   = None
+    lat:  Optional[float] = None
+    lon:  Optional[float] = None
+    mood: Optional[str]   = None
+
+
+# ---------------------------------------------------------------------------
+# Google token refresh helper
+# ---------------------------------------------------------------------------
+
+def _get_valid_google_token(user: User, db: Session) -> str | None:
+    """Return a valid Google access token, refreshing if needed."""
+    if not user.google_access_token:
+        return None
+    if user.google_token_expiry and datetime.utcnow() < user.google_token_expiry:
+        return user.google_access_token
+    # Refresh
+    if not user.google_refresh_token:
+        return None
+    try:
+        r = http_requests.post("https://oauth2.googleapis.com/token", data={
+            "client_id":     GOOGLE_CLIENT_ID,
+            "client_secret": GOOGLE_CLIENT_SECRET,
+            "refresh_token": user.google_refresh_token,
+            "grant_type":    "refresh_token",
+        }, timeout=10)
+        data = r.json()
+        user.google_access_token = data.get("access_token", user.google_access_token)
+        expires_in = data.get("expires_in", 3600)
+        user.google_token_expiry = datetime.utcnow() + timedelta(seconds=expires_in)
+        db.commit()
+        return user.google_access_token
+    except Exception:
+        return None
+
+
 # ===========================================================================
 # Routes
 # ===========================================================================
@@ -318,7 +373,7 @@ def auth_google():
         "client_id":     GOOGLE_CLIENT_ID,
         "redirect_uri":  REDIRECT_URI,
         "response_type": "code",
-        "scope":         "openid email profile",
+        "scope":         CALENDAR_SCOPES,
         "access_type":   "offline",
         "prompt":        "select_account",
     }
@@ -340,6 +395,11 @@ def auth_callback(code: str, db: Session = Depends(get_db)):
     if not access_token:
         raise HTTPException(status_code=400, detail="Google OAuth failed.")
 
+    google_access  = token_data.get("access_token")
+    google_refresh = token_data.get("refresh_token")
+    expires_in     = token_data.get("expires_in", 3600)
+    token_expiry   = datetime.utcnow() + timedelta(seconds=expires_in)
+
     # Get Google user profile
     info_resp = http_requests.get(
         GOOGLE_INFO_URL,
@@ -348,7 +408,8 @@ def auth_callback(code: str, db: Session = Depends(get_db)):
     )
     info = info_resp.json()
 
-    user  = get_or_create_user(db, info["id"], info["email"], info.get("name", ""), info.get("picture", ""))
+    user  = get_or_create_user(db, info["id"], info["email"], info.get("name", ""), info.get("picture", ""),
+                                access_token=google_access, refresh_token=google_refresh, token_expiry=token_expiry)
     token = create_access_token(user.id, user.email)
 
     # Redirect to frontend with token in query param
@@ -361,6 +422,28 @@ def get_me(user_id: int = Depends(get_current_user_id), db: Session = Depends(ge
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
     return {"id": user.id, "email": user.email, "name": user.name, "picture": user.picture}
+
+
+@app.get("/api/auth/connect-calendar")
+def connect_calendar():
+    if not GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=500, detail="Google OAuth is not configured.")
+    params = {
+        "client_id":     GOOGLE_CLIENT_ID,
+        "redirect_uri":  REDIRECT_URI,
+        "response_type": "code",
+        "scope":         CALENDAR_SCOPES,
+        "access_type":   "offline",
+        "prompt":        "consent",  # force refresh token
+    }
+    return RedirectResponse(f"{GOOGLE_AUTH_URL}?{urlencode(params)}")
+
+
+@app.get("/api/auth/calendar-status")
+def calendar_status(user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
+    has_calendar = bool(user and user.google_access_token)
+    return {"connected": has_calendar}
 
 
 # ---------------------------------------------------------------------------
@@ -524,6 +607,30 @@ def outfit_feedback(body: OutfitFeedbackBody, user_id: int = Depends(get_current
         feedback=body.feedback,
     )
     db.add(fb); db.commit()
+    return {"success": True}
+
+
+# ---------------------------------------------------------------------------
+# Saved occasion presets
+# ---------------------------------------------------------------------------
+
+@app.get("/api/presets")
+def list_presets(user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    presets = db.query(UserPreset).filter(UserPreset.user_id == user_id).order_by(UserPreset.created_at).all()
+    return [{"id": p.id, "label": p.label, "occasion": p.occasion} for p in presets]
+
+@app.post("/api/presets")
+def create_preset(body: UserPresetBody, user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    p = UserPreset(user_id=user_id, label=body.label.strip(), occasion=body.occasion.strip())
+    db.add(p); db.commit(); db.refresh(p)
+    return {"id": p.id, "label": p.label, "occasion": p.occasion}
+
+@app.delete("/api/presets/{preset_id}")
+def delete_preset(preset_id: int, user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    p = db.query(UserPreset).filter(UserPreset.id == preset_id, UserPreset.user_id == user_id).first()
+    if not p:
+        raise HTTPException(status_code=404, detail="Preset not found.")
+    db.delete(p); db.commit()
     return {"success": True}
 
 
@@ -970,6 +1077,139 @@ def import_inspo_from_url(
     )
     db.add(item); db.commit(); db.refresh(item)
     return serialize_inspo(item)
+
+
+# ---------------------------------------------------------------------------
+# Google Calendar
+# ---------------------------------------------------------------------------
+
+@app.get("/api/calendar/week")
+def get_calendar_week(user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    """Fetch this week's Google Calendar events (Mon-Sun)."""
+    user = db.query(User).filter(User.id == user_id).first()
+    token = _get_valid_google_token(user, db)
+    if not token:
+        raise HTTPException(status_code=403, detail="Google Calendar not connected. Please reconnect.")
+
+    today  = datetime.utcnow().date()
+    monday = today - timedelta(days=today.weekday())
+    sunday = monday + timedelta(days=6)
+
+    try:
+        resp = http_requests.get(
+            "https://www.googleapis.com/calendar/v3/calendars/primary/events",
+            params={
+                "timeMin":      f"{monday}T00:00:00Z",
+                "timeMax":      f"{sunday}T23:59:59Z",
+                "singleEvents": True,
+                "orderBy":      "startTime",
+                "maxResults":   50,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=10,
+        )
+        events = resp.json().get("items", [])
+    except Exception:
+        raise HTTPException(status_code=502, detail="Could not reach Google Calendar.")
+
+    # Group events by date
+    days_map = {}
+    for i in range(7):
+        d = monday + timedelta(days=i)
+        days_map[str(d)] = {
+            "date": str(d),
+            "day": d.strftime("%A"),
+            "events": [],
+        }
+
+    for ev in events:
+        start    = ev.get("start", {})
+        date_str = start.get("date") or (start.get("dateTime") or "")[:10]
+        if date_str in days_map:
+            summary = ev.get("summary", "").strip()
+            if summary:
+                days_map[date_str]["events"].append(summary)
+
+    return {"week": list(days_map.values())}
+
+
+@app.post("/api/outfit/week-plan")
+def week_plan(body: WeekPlanBody, user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    """Generate unique daily outfits for a Mon-Sun plan."""
+    all_clothes = db.query(ClothingItem).filter(ClothingItem.user_id == user_id).all()
+    if not all_clothes:
+        raise HTTPException(status_code=400, detail="Your wardrobe is empty — upload some clothes first!")
+
+    inspo_items   = db.query(InspoItem).filter(InspoItem.user_id == user_id).all()
+    inspo_context = "; ".join(it.style_notes for it in inspo_items if it.style_notes)[:1500]
+
+    bad_recs  = db.query(OutfitFeedback).filter(
+        OutfitFeedback.user_id == user_id, OutfitFeedback.feedback == "bad"
+    ).order_by(OutfitFeedback.created_at.desc()).limit(20).all()
+    bad_combos = [json.loads(r.item_descs) for r in bad_recs if r.item_descs]
+
+    wardrobe_summary = [
+        {"id": c.id, "type": c.type, "subtype": c.subtype, "color": c.color,
+         "description": c.description, "formality": c.formality, "fit": c.fit, "season": c.season}
+        for c in all_clothes
+    ]
+
+    weather = None
+    if body.city or (body.lat is not None and body.lon is not None):
+        try:
+            weather = _resolve_weather(body.city, body.lat, body.lon)
+        except Exception:
+            pass
+    if not weather:
+        weather = {"temp_celsius": 18, "temp_fahrenheit": 64, "description": "mild", "city": ""}
+
+    used_ids: list[int] = []
+    results = []
+
+    for day in body.days:
+        # Build occasion text from events or user input
+        if day.events:
+            occasion = ", ".join(day.events)
+        elif day.occasion:
+            occasion = day.occasion
+        else:
+            results.append({
+                "date": day.date, "day": day.day,
+                "events": [], "occasion": None,
+                "outfit": None, "needs_input": True,
+            })
+            continue
+
+        try:
+            item_ids, reason = suggest_personalized_outfit(
+                wardrobe_items=wardrobe_summary,
+                inspo_context=inspo_context,
+                mood=body.mood or "ready for the day",
+                occasion=occasion,
+                weather=weather,
+                exclude_ids=used_ids,
+                bad_combos=bad_combos,
+            )
+            used_ids.extend(item_ids)
+            id_order = {iid: idx for idx, iid in enumerate(item_ids)}
+            selected = sorted(
+                [c for c in all_clothes if c.id in set(item_ids)],
+                key=lambda c: id_order.get(c.id, 999),
+            )
+            results.append({
+                "date": day.date, "day": day.day,
+                "events": day.events, "occasion": occasion,
+                "outfit": {"items": [serialize_clothing(c) for c in selected], "reason": reason},
+                "needs_input": False,
+            })
+        except Exception:
+            results.append({
+                "date": day.date, "day": day.day,
+                "events": day.events, "occasion": occasion,
+                "outfit": None, "needs_input": False,
+            })
+
+    return {"week": results, "weather": weather}
 
 
 # ---------------------------------------------------------------------------

@@ -12,6 +12,9 @@ class User(Base):
     email      = Column(String, unique=True, nullable=False)
     name       = Column(String, nullable=False)
     picture    = Column(String, nullable=True)
+    google_access_token  = Column(String, nullable=True)
+    google_refresh_token = Column(String, nullable=True)
+    google_token_expiry  = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
@@ -53,6 +56,15 @@ class OutfitFeedback(Base):
     item_descs = Column(Text, nullable=True)    # JSON list of human-readable descriptions
     occasion   = Column(String, nullable=True)
     feedback   = Column(String, default="bad")  # "bad" or "loved"
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class UserPreset(Base):
+    __tablename__ = "user_presets"
+    id         = Column(Integer, primary_key=True, index=True)
+    user_id    = Column(Integer, nullable=False, index=True)
+    label      = Column(String, nullable=False)    # short display name e.g. "work"
+    occasion   = Column(Text, nullable=False)      # full occasion text e.g. "office, smart casual..."
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
