@@ -706,32 +706,64 @@ def inspo_recommendations(user_id: int = Depends(get_current_user_id), db: Sessi
 # ---------------------------------------------------------------------------
 
 _PINTEREST_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     "Accept": "application/rss+xml, application/xml, text/xml, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Cache-Control": "no-cache",
+}
+
+_IMG_DL_HEADERS = {
+    **_PINTEREST_HEADERS,
+    "Referer": "https://www.pinterest.com/",
+    "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
 }
 
 def _upgrade_pinterest_img_url(url: str) -> str:
-    """Swap low-res Pinterest CDN paths to 736x for better AI analysis."""
+    """Swap any resolution Pinterest CDN path to 736x."""
     return re.sub(r'/\d+x/', '/736x/', url)
 
 def _extract_images_from_rss(xml_bytes: bytes, max_pins: int) -> list[str]:
+    """Extract image URLs from any RSS/Atom variant Pinterest might return."""
     ns = {"media": "http://search.yahoo.com/mrss/"}
     root = ET.fromstring(xml_bytes)
     urls: list[str] = []
-    for item in root.findall(".//item"):
+    for item in root.iter():
         if len(urls) >= max_pins:
             break
-        # Try media:thumbnail first
-        thumb = item.find("media:thumbnail", ns)
-        if thumb is not None and thumb.get("url"):
-            urls.append(_upgrade_pinterest_img_url(thumb.get("url")))
+        tag = item.tag.split("}")[-1]  # strip namespace
+        if tag in ("thumbnail", "content") and item.get("url"):
+            urls.append(_upgrade_pinterest_img_url(item.get("url")))
+        elif tag == "description":
+            for m in re.finditer(r'<img[^>]+src=["\']([^"\']+)["\']', item.text or ""):
+                if len(urls) < max_pins:
+                    urls.append(_upgrade_pinterest_img_url(m.group(1)))
+    return list(dict.fromkeys(urls))  # dedupe, preserve order
+
+
+def _fetch_pinterest_rss(board_url: str) -> bytes:
+    """Try several URL patterns to get the RSS feed. Returns raw bytes or raises."""
+    base = board_url.rstrip("/")
+    candidates = [
+        base + "/rss/",
+        base + "/feed.rss",
+        base + ".rss",
+    ]
+    last_status = None
+    for rss_url in candidates:
+        try:
+            r = http_requests.get(rss_url, headers=_PINTEREST_HEADERS, timeout=15, allow_redirects=True)
+            if r.status_code == 200 and (b"<rss" in r.content[:500] or b"<feed" in r.content[:500] or b"<?xml" in r.content[:100]):
+                return r.content
+            last_status = r.status_code
+        except Exception:
             continue
-        # Fall back to <img src> inside <description>
-        desc = item.findtext("description") or ""
-        m = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', desc)
-        if m:
-            urls.append(_upgrade_pinterest_img_url(m.group(1)))
-    return urls
+    raise HTTPException(
+        status_code=400,
+        detail=(
+            f"Pinterest didn't return a valid feed (last status: {last_status}). "
+            "Make sure the board is public — go to the board, tap ··· → Edit → uncheck 'Keep this board secret'."
+        ),
+    )
 
 
 @app.post("/api/inspo/import-pinterest")
@@ -743,49 +775,45 @@ def import_pinterest_board(
     url = body.board_url.strip()
     if not url.startswith("http"):
         url = "https://" + url
+    # Normalise pinterest.com → www.pinterest.com
+    url = re.sub(r"https?://(?:www\.)?pinterest\.com", "https://www.pinterest.com", url)
     if "pinterest.com" not in url:
-        raise HTTPException(status_code=400, detail="Please enter a valid Pinterest board URL.")
+        raise HTTPException(status_code=400, detail="Please enter a valid Pinterest board URL (e.g. https://www.pinterest.com/you/your-board/).")
 
-    rss_url = url.rstrip("/") + "/rss/"
+    # Boards must have at least /username/boardname/ — reject profile or pin URLs
+    path_parts = [p for p in url.split("/") if p and "pinterest" not in p and "http" not in p and p not in ("www","com")]
+    if len(path_parts) < 2:
+        raise HTTPException(status_code=400, detail="That looks like a profile or pin URL. Paste a specific board URL, e.g. https://www.pinterest.com/you/my-board/")
+
     try:
-        resp = http_requests.get(rss_url, headers=_PINTEREST_HEADERS, timeout=15)
+        rss_bytes = _fetch_pinterest_rss(url)
+    except HTTPException:
+        raise
     except Exception:
-        raise HTTPException(status_code=502, detail="Could not reach Pinterest — check your connection.")
-
-    if resp.status_code != 200:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Pinterest returned {resp.status_code}. Make sure the board is public and the URL is correct.",
-        )
+        raise HTTPException(status_code=502, detail="Could not reach Pinterest — check your connection and try again.")
 
     try:
-        img_urls = _extract_images_from_rss(resp.content, body.max_pins)
+        img_urls = _extract_images_from_rss(rss_bytes, body.max_pins)
     except ET.ParseError:
-        raise HTTPException(status_code=400, detail="Could not parse Pinterest feed. The board may be private.")
+        raise HTTPException(status_code=400, detail="Could not parse the Pinterest feed. The board may be private or empty.")
 
     if not img_urls:
-        raise HTTPException(status_code=400, detail="No images found in this board. It may be empty or private.")
+        raise HTTPException(status_code=400, detail="No pin images found in this board. It may be empty, private, or the URL isn't a board.")
 
     imported: list[InspoItem] = []
     for img_url in img_urls:
         try:
-            # Try 736x first (already done by _upgrade_pinterest_img_url), fall back to original
-            original_url = re.sub(r'/736x/', '/236x/', img_url)  # get original low-res as fallback
-            img_download_headers = {
-                **_PINTEREST_HEADERS,
-                "Referer": "https://www.pinterest.com/",
-                "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
-            }
+            fallback_url = re.sub(r'/736x/', '/236x/', img_url)
             img_resp = None
-            for try_url in ([img_url] if img_url == original_url else [img_url, original_url]):
-                r = http_requests.get(try_url, headers=img_download_headers, timeout=12)
-                if r.status_code == 200 and r.content:
+            for try_url in ([img_url] if img_url == fallback_url else [img_url, fallback_url]):
+                r = http_requests.get(try_url, headers=_IMG_DL_HEADERS, timeout=12, allow_redirects=True)
+                if r.status_code == 200 and len(r.content) > 1024:  # ignore tiny/broken images
                     img_resp = r
                     break
             if not img_resp:
                 continue
             content_type = img_resp.headers.get("Content-Type", "image/jpeg")
-            ext = ".jpg" if "jpeg" in content_type else ".png" if "png" in content_type else ".jpg"
+            ext = ".png" if "png" in content_type else ".jpg"
             filename = f"{uuid.uuid4()}{ext}"
             (UPLOAD_DIR / filename).write_bytes(img_resp.content)
 
@@ -802,13 +830,58 @@ def import_pinterest_board(
             continue
 
     if not imported:
-        raise HTTPException(status_code=400, detail="Could not download any images from this board.")
+        raise HTTPException(status_code=400, detail="Fetched the feed but couldn't download the pin images. Pinterest may be blocking the server — try again or upload screenshots manually.")
 
     db.commit()
     for item in imported:
         db.refresh(item)
 
     return {"imported": len(imported), "items": [serialize_inspo(i) for i in imported]}
+
+
+# ---------------------------------------------------------------------------
+# Inspo — import from direct image URL (fallback for when Pinterest RSS fails)
+# ---------------------------------------------------------------------------
+
+class ImportFromUrlBody(BaseModel):
+    image_url: str
+
+@app.post("/api/inspo/import-url")
+def import_inspo_from_url(
+    body:    ImportFromUrlBody,
+    user_id: int     = Depends(get_current_user_id),
+    db:      Session = Depends(get_db),
+):
+    url = body.image_url.strip()
+    if not url.startswith("http"):
+        raise HTTPException(status_code=400, detail="Please enter a valid image URL.")
+    # Upgrade Pinterest CDN URLs
+    if "pinimg.com" in url:
+        url = _upgrade_pinterest_img_url(url)
+    try:
+        r = http_requests.get(url, headers=_IMG_DL_HEADERS, timeout=15, allow_redirects=True)
+        if r.status_code != 200 or len(r.content) < 1024:
+            raise HTTPException(status_code=400, detail="Could not download that image — make sure the URL is a direct image link.")
+        content_type = r.headers.get("Content-Type", "image/jpeg")
+        if not content_type.startswith("image/"):
+            raise HTTPException(status_code=400, detail="That URL doesn't point to an image file.")
+        ext = ".png" if "png" in content_type else ".jpg"
+        filename = f"{uuid.uuid4()}{ext}"
+        (UPLOAD_DIR / filename).write_bytes(r.content)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to fetch image: {exc}")
+
+    result = analyze_inspo_image(str(UPLOAD_DIR / filename))
+    item = InspoItem(
+        user_id=user_id,
+        filename=filename,
+        items_detected=json.dumps(result.get("items", [])),
+        style_notes=result.get("style_notes", ""),
+    )
+    db.add(item); db.commit(); db.refresh(item)
+    return serialize_inspo(item)
 
 
 # ---------------------------------------------------------------------------

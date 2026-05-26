@@ -120,6 +120,10 @@ export default function Inspo() {
   const [importProgress, setImportProgress] = useState(null) // { current, total, count }
   const [importMsg, setImportMsg]         = useState(null)  // { ok: bool, text: str }
 
+  // Direct image URL import fallback
+  const [imageUrlInput, setImageUrlInput] = useState('')
+  const [importingUrl, setImportingUrl]   = useState(false)
+
   // Selection state
   const [selectedIds, setSelectedIds] = useState(new Set())
 
@@ -184,21 +188,26 @@ export default function Inspo() {
     setImportMsg(null)
     setImportProgress({ current: 0, total: toImport.length, count: 0 })
     let totalImported = 0
+    let lastError = null
     for (let i = 0; i < toImport.length; i++) {
       setImportProgress({ current: i + 1, total: toImport.length, count: totalImported })
       try {
         const res = await axios.post(`${API}/api/inspo/import-pinterest`, { board_url: toImport[i] })
         setInspoItems(p => [...res.data.items, ...p])
         totalImported += res.data.imported
-      } catch {
-        // skip failed board, continue
+      } catch (err) {
+        lastError = err.response?.data?.detail || 'Could not import this board'
       }
     }
     fetchRecs()
     setPinterestUrl('')
     setBoardList([])
     setImportProgress(null)
-    setImportMsg({ ok: true, text: `imported ${totalImported} pins from ${toImport.length} board${toImport.length > 1 ? 's' : ''} ✦` })
+    if (totalImported > 0) {
+      setImportMsg({ ok: true, text: `imported ${totalImported} pins from ${toImport.length} board${toImport.length > 1 ? 's' : ''} ✦` })
+    } else {
+      setImportMsg({ ok: false, text: lastError || 'No pins imported — make sure the board is public' })
+    }
     setImporting(false)
   }
 
@@ -263,6 +272,24 @@ export default function Inspo() {
       })
       setLookSaved(true)
     } catch { /* silent */ }
+  }
+
+  const handleImportFromUrl = async () => {
+    const url = imageUrlInput.trim()
+    if (!url || importingUrl) return
+    setImportingUrl(true)
+    setImportMsg(null)
+    try {
+      const res = await axios.post(`${API}/api/inspo/import-url`, { image_url: url })
+      setInspoItems(p => [res.data, ...p])
+      setImageUrlInput('')
+      setImportMsg({ ok: true, text: 'image added to your inspo board ✦' })
+      fetchRecs()
+    } catch (err) {
+      setImportMsg({ ok: false, text: err.response?.data?.detail || 'Could not import that image' })
+    } finally {
+      setImportingUrl(false)
+    }
   }
 
   const clearSelection = () => { setSelectedIds(new Set()); setShowLookPanel(false); setLookResult(null) }
@@ -349,6 +376,42 @@ export default function Inspo() {
             {importMsg.text}
           </p>
         )}
+
+        {/* Fallback: paste a single image URL */}
+        <details className="group">
+          <summary className="text-xs cursor-pointer list-none flex items-center gap-1" style={{ color: '#C4B5AC' }}>
+            <svg className="w-3 h-3 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+            board not working? paste a direct image URL instead
+          </summary>
+          <div className="mt-2.5 space-y-2">
+            <p className="text-[11px]" style={{ color: '#9B8E84' }}>
+              on Pinterest: right-click any pin → "Copy image address" → paste below
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="url"
+                value={imageUrlInput}
+                onChange={e => { setImageUrlInput(e.target.value); setImportMsg(null) }}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleImportFromUrl() } }}
+                placeholder="https://i.pinimg.com/736x/..."
+                className="flex-1 border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#8B1A1A]"
+                style={{ borderColor: '#E3D9CE', color: '#2D1A0E', backgroundColor: '#FAF7F2' }}
+                disabled={importingUrl}
+              />
+              <button
+                onClick={handleImportFromUrl}
+                disabled={importingUrl || !imageUrlInput.trim()}
+                className="shrink-0 rounded-xl px-3 py-2 text-xs font-medium transition-all disabled:opacity-40 flex items-center gap-1"
+                style={{ backgroundColor: '#2D1A0E', color: '#FAF7F2' }}
+              >
+                {importingUrl && <span className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin inline-block" />}
+                {importingUrl ? '…' : 'add'}
+              </button>
+            </div>
+          </div>
+        </details>
       </div>
 
       {/* Upload */}
