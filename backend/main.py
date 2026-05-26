@@ -695,8 +695,10 @@ def inspo_recommendations(user_id: int = Depends(get_current_user_id), db: Sessi
     for rt, count in type_counts.items():
         if count < 3: continue
         mapped = _map_inspo_type_to_wardrobe(rt)
-        recs.append({"item_type": rt, "inspo_count": count, "owned_count": wardrobe_counts.get(mapped, 0),
-                     "suggestion": f"You've saved {rt} {count} time{'s' if count != 1 else ''} — consider adding this to your wardrobe for a true capsule look."})
+        owned = wardrobe_counts.get(mapped, 0)
+        if owned > 0: continue  # already have it — skip
+        recs.append({"item_type": rt, "inspo_count": count, "owned_count": 0,
+                     "suggestion": f"You've saved {rt} {count} time{'s' if count != 1 else ''} — this could be a great addition to complete your capsule look."})
     recs.sort(key=lambda r: r["inspo_count"], reverse=True)
     return {"recommendations": recs, "total_inspo_items": len(inspo_items)}
 
