@@ -22,9 +22,7 @@ GOOGLE_AUTH_URL  = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_INFO_URL  = "https://www.googleapis.com/oauth2/v2/userinfo"
 
-GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.readonly"
-CALENDAR_SCOPES       = f"openid email profile {GOOGLE_CALENDAR_SCOPE}"
-GOOGLE_REFRESH_URL    = "https://oauth2.googleapis.com/token"
+CALENDAR_SCOPES = "openid email profile"  # calendar scope removed — requires Google verification
 
 
 # ---------------------------------------------------------------------------

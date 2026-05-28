@@ -424,28 +424,6 @@ def get_me(user_id: int = Depends(get_current_user_id), db: Session = Depends(ge
     return {"id": user.id, "email": user.email, "name": user.name, "picture": user.picture}
 
 
-@app.get("/api/auth/connect-calendar")
-def connect_calendar():
-    if not GOOGLE_CLIENT_ID:
-        raise HTTPException(status_code=500, detail="Google OAuth is not configured.")
-    params = {
-        "client_id":     GOOGLE_CLIENT_ID,
-        "redirect_uri":  REDIRECT_URI,
-        "response_type": "code",
-        "scope":         CALENDAR_SCOPES,
-        "access_type":   "offline",
-        "prompt":        "consent",  # force refresh token
-    }
-    return RedirectResponse(f"{GOOGLE_AUTH_URL}?{urlencode(params)}")
-
-
-@app.get("/api/auth/calendar-status")
-def calendar_status(user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.id == user_id).first()
-    has_calendar = bool(user and user.google_access_token)
-    return {"connected": has_calendar}
-
-
 # ---------------------------------------------------------------------------
 # Clothing
 # ---------------------------------------------------------------------------
@@ -1077,60 +1055,6 @@ def import_inspo_from_url(
     )
     db.add(item); db.commit(); db.refresh(item)
     return serialize_inspo(item)
-
-
-# ---------------------------------------------------------------------------
-# Google Calendar
-# ---------------------------------------------------------------------------
-
-@app.get("/api/calendar/week")
-def get_calendar_week(user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
-    """Fetch this week's Google Calendar events (Mon-Sun)."""
-    user = db.query(User).filter(User.id == user_id).first()
-    token = _get_valid_google_token(user, db)
-    if not token:
-        raise HTTPException(status_code=403, detail="Google Calendar not connected. Please reconnect.")
-
-    today  = datetime.utcnow().date()
-    monday = today - timedelta(days=today.weekday())
-    sunday = monday + timedelta(days=6)
-
-    try:
-        resp = http_requests.get(
-            "https://www.googleapis.com/calendar/v3/calendars/primary/events",
-            params={
-                "timeMin":      f"{monday}T00:00:00Z",
-                "timeMax":      f"{sunday}T23:59:59Z",
-                "singleEvents": True,
-                "orderBy":      "startTime",
-                "maxResults":   50,
-            },
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=10,
-        )
-        events = resp.json().get("items", [])
-    except Exception:
-        raise HTTPException(status_code=502, detail="Could not reach Google Calendar.")
-
-    # Group events by date
-    days_map = {}
-    for i in range(7):
-        d = monday + timedelta(days=i)
-        days_map[str(d)] = {
-            "date": str(d),
-            "day": d.strftime("%A"),
-            "events": [],
-        }
-
-    for ev in events:
-        start    = ev.get("start", {})
-        date_str = start.get("date") or (start.get("dateTime") or "")[:10]
-        if date_str in days_map:
-            summary = ev.get("summary", "").strip()
-            if summary:
-                days_map[date_str]["events"].append(summary)
-
-    return {"week": list(days_map.values())}
 
 
 @app.post("/api/outfit/week-plan")

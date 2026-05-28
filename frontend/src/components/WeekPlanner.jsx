@@ -1,10 +1,13 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import axios from 'axios'
 import ClothesLoader from './ClothesLoader'
 
 const API = import.meta.env.VITE_API_URL ?? ''
 
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 const DAY_SHORT = { Monday: 'Mon', Tuesday: 'Tue', Wednesday: 'Wed', Thursday: 'Thu', Friday: 'Fri', Saturday: 'Sat', Sunday: 'Sun' }
+
+const QUICK_FILL = ['work', 'gym', 'date night', 'going out', 'errands', 'wfh', 'brunch', 'travel']
 
 function weatherEmoji(condition = '') {
   const c = condition.toLowerCase()
@@ -15,17 +18,30 @@ function weatherEmoji(condition = '') {
   return '🌤️'
 }
 
+// Returns ISO date strings for Mon–Sun of the current week
+function getWeekDates() {
+  const today = new Date()
+  const dow = today.getDay() // 0=Sun
+  const monday = new Date(today)
+  monday.setDate(today.getDate() - ((dow + 6) % 7))
+  return DAYS.map((_, i) => {
+    const d = new Date(monday)
+    d.setDate(monday.getDate() + i)
+    return d.toISOString().slice(0, 10)
+  })
+}
+
 function OutfitMini({ items }) {
   if (!items?.length) return null
   return (
-    <div className="flex gap-1.5 flex-wrap mt-2">
+    <div className="flex gap-1 flex-wrap mt-2">
       {items.slice(0, 4).map((item, i) => (
-        <div key={item.id ?? i} className="w-14 h-14 rounded-lg overflow-hidden shrink-0" style={{ backgroundColor: '#F0EAE2' }}>
+        <div key={item.id ?? i} className="w-12 h-12 rounded-lg overflow-hidden shrink-0" style={{ backgroundColor: '#F0EAE2' }}>
           <img src={`${API}${item.image_url}`} alt={item.type} className="w-full h-full object-cover" />
         </div>
       ))}
       {items.length > 4 && (
-        <div className="w-14 h-14 rounded-lg flex items-center justify-center text-xs" style={{ backgroundColor: '#F0EAE2', color: '#9B8E84' }}>
+        <div className="w-12 h-12 rounded-lg flex items-center justify-center text-xs shrink-0" style={{ backgroundColor: '#F0EAE2', color: '#9B8E84' }}>
           +{items.length - 4}
         </div>
       )}
@@ -33,10 +49,9 @@ function OutfitMini({ items }) {
   )
 }
 
-function DayCard({ day, onOccasionChange }) {
-  const hasEvents = day.events?.length > 0
-  const hasOutfit = day.outfit?.items?.length > 0
-  const [expanded, setExpanded] = useState(false)
+function DayCard({ day, date, occasion, onOccasionChange, outfitData, expanded, onToggleExpand }) {
+  const hasOutfit = outfitData?.items?.length > 0
+  const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
   return (
     <div
@@ -46,114 +61,84 @@ function DayCard({ day, onOccasionChange }) {
         borderColor: hasOutfit ? '#D4C5C5' : '#E3D9CE',
       }}
     >
-      {/* Day header */}
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-sm font-medium" style={{ color: '#2D1A0E' }}>
-            {DAY_SHORT[day.day] ?? day.day}
-            <span className="text-xs font-normal ml-1.5" style={{ color: '#C4B5AC' }}>
-              {new Date(day.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-            </span>
+            {DAY_SHORT[day]}
+            <span className="text-xs font-normal ml-1.5" style={{ color: '#C4B5AC' }}>{dateLabel}</span>
           </p>
-          {hasEvents && (
-            <div className="mt-0.5 space-y-0.5">
-              {day.events.slice(0, 2).map((ev, i) => (
-                <p key={i} className="text-[11px] truncate" style={{ color: '#9B8E84' }}>📅 {ev}</p>
-              ))}
-              {day.events.length > 2 && (
-                <p className="text-[11px]" style={{ color: '#C4B5AC' }}>+{day.events.length - 2} more</p>
-              )}
-            </div>
+          {occasion && !hasOutfit && (
+            <p className="text-[11px] mt-0.5 truncate" style={{ color: '#9B8E84' }}>{occasion}</p>
+          )}
+          {hasOutfit && (
+            <p className="text-[11px] mt-0.5 truncate" style={{ color: '#9B8E84' }}>{outfitData.occasion || occasion}</p>
           )}
         </div>
         {hasOutfit && (
-          <button onClick={() => setExpanded(p => !p)} className="text-[10px] shrink-0 mt-0.5" style={{ color: '#C4B5AC' }}>
+          <button onClick={onToggleExpand} className="text-[10px] shrink-0 mt-0.5" style={{ color: '#C4B5AC' }}>
             {expanded ? 'less' : 'details'}
           </button>
         )}
       </div>
 
-      {/* Outfit */}
       {hasOutfit ? (
         <>
-          <OutfitMini items={day.outfit.items} />
-          {expanded && day.outfit.reason && (
-            <p className="text-[11px] italic" style={{ color: '#9B8E84' }}>{day.outfit.reason}</p>
+          <OutfitMini items={outfitData.items} />
+          {expanded && outfitData.reason && (
+            <p className="text-[11px] italic mt-1" style={{ color: '#9B8E84' }}>{outfitData.reason}</p>
           )}
         </>
-      ) : day.needs_input ? (
+      ) : (
         <input
-          value={day.occasion || ''}
-          onChange={e => onOccasionChange(day.date, e.target.value)}
+          value={occasion}
+          onChange={e => onOccasionChange(e.target.value)}
           placeholder="what's going on?"
           className="w-full text-xs bg-transparent border-b focus:outline-none pb-1"
-          style={{ borderColor: day.occasion ? '#8B1A1A' : '#E3D9CE', color: '#2D1A0E' }}
+          style={{ borderColor: occasion ? '#8B1A1A' : '#E3D9CE', color: '#2D1A0E' }}
         />
-      ) : (
-        <p className="text-xs" style={{ color: '#C4B5AC' }}>generating…</p>
       )}
     </div>
   )
 }
 
 export default function WeekPlanner() {
-  const [calConnected, setCalConnected]   = useState(null) // null = checking
-  const [calDays, setCalDays]             = useState([])    // raw calendar data
-  const [weekData, setWeekData]           = useState([])    // after outfit generation
-  const [userOccasions, setUserOccasions] = useState({})   // {date: occasion text}
-  const [loadingCal, setLoadingCal]       = useState(false)
-  const [generating, setGenerating]       = useState(false)
-  const [error, setError]                 = useState('')
-  const [city, setCity]                   = useState('')
-  const [coords, setCoords]               = useState(null)
-  const [locating, setLocating]           = useState(false)
-  const [weather, setWeather]             = useState(null)
-  const [generated, setGenerated]         = useState(false)
-
-  // Check if calendar is connected
-  useEffect(() => {
-    axios.get(`${API}/api/auth/calendar-status`)
-      .then(r => setCalConnected(r.data.connected))
-      .catch(() => setCalConnected(false))
-  }, [])
-
-  // Load calendar events once connected
-  useEffect(() => {
-    if (!calConnected) return
-    setLoadingCal(true)
-    axios.get(`${API}/api/calendar/week`)
-      .then(r => {
-        setCalDays(r.data.week)
-        // Initialise userOccasions for empty days
-        const init = {}
-        r.data.week.forEach(d => { if (!d.events?.length) init[d.date] = '' })
-        setUserOccasions(init)
-      })
-      .catch(() => setError('Could not load your calendar — try reconnecting.'))
-      .finally(() => setLoadingCal(false))
-  }, [calConnected])
+  const weekDates = getWeekDates()
+  const [occasions, setOccasions] = useState(
+    Object.fromEntries(DAYS.map(d => [d, '']))
+  )
+  const [city, setCity]         = useState('')
+  const [coords, setCoords]     = useState(null)
+  const [locating, setLocating] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [weekData, setWeekData] = useState([])
+  const [weather, setWeather]   = useState(null)
+  const [error, setError]       = useState('')
+  const [generated, setGenerated] = useState(false)
+  const [expandedDay, setExpandedDay] = useState(null)
+  const [activeFill, setActiveFill] = useState(null) // day being quick-filled
 
   const handleGetLocation = () => {
     if (!navigator.geolocation) { setError('Geolocation not supported — type your city.'); return }
     setLocating(true)
     navigator.geolocation.getCurrentPosition(
       pos => { setCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude }); setCity(''); setLocating(false) },
-      ()  => { setLocating(false); setError('Could not get location — type your city.') }
+      ()  => { setLocating(false); setError('Could not get location — type your city instead.') }
     )
   }
 
+  const setOccasion = (day, val) => setOccasions(p => ({ ...p, [day]: val }))
+
   const handleGenerate = async () => {
-    const days = calDays.map(d => ({
-      date:     d.date,
-      day:      d.day,
-      events:   d.events || [],
-      occasion: userOccasions[d.date] || null,
+    const days = DAYS.map((day, i) => ({
+      date:     weekDates[i],
+      day,
+      events:   occasions[day] ? [occasions[day]] : [],
+      occasion: occasions[day] || null,
     }))
     setGenerating(true)
     setError('')
-    setGenerated(false)
     try {
-      const locationPayload = coords ? { lat: coords.lat, lon: coords.lon } : city ? { city } : {}
+      const locationPayload = coords ? { lat: coords.lat, lon: coords.lon } : city.trim() ? { city: city.trim() } : {}
       const res = await axios.post(`${API}/api/outfit/week-plan`, { days, ...locationPayload })
       setWeekData(res.data.week)
       setWeather(res.data.weather)
@@ -165,50 +150,17 @@ export default function WeekPlanner() {
     }
   }
 
-  // Merge generated outfits back into calendar days for display
-  const displayDays = generated
-    ? calDays.map(d => {
-        const gen = weekData.find(w => w.date === d.date)
-        return gen ? { ...d, ...gen, occasion: userOccasions[d.date] || gen.occasion } : { ...d, needs_input: !d.events?.length }
-      })
-    : calDays.map(d => ({ ...d, needs_input: !d.events?.length, outfit: null }))
+  const handleReset = () => {
+    setGenerated(false)
+    setWeekData([])
+    setWeather(null)
+    setError('')
+    setExpandedDay(null)
+    setOccasions(Object.fromEntries(DAYS.map(d => [d, ''])))
+  }
 
   const hasLocation = coords || city.trim()
-
-  // ── Not connected ──
-  if (calConnected === null) {
-    return (
-      <div className="flex justify-center py-24">
-        <ClothesLoader />
-      </div>
-    )
-  }
-
-  if (!calConnected) {
-    return (
-      <div className="space-y-8 max-w-2xl">
-        <div>
-          <h2 className="serif-italic text-3xl leading-snug" style={{ color: '#2D1A0E' }}>week planner</h2>
-          <p className="text-sm mt-1" style={{ color: '#9B8E84' }}>connect your Google Calendar to plan your outfits for the week</p>
-        </div>
-        <div className="rounded-2xl border p-8 flex flex-col items-center gap-5 text-center" style={{ backgroundColor: '#fff', borderColor: '#E3D9CE' }}>
-          <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl" style={{ backgroundColor: '#F0EAE2' }}>📅</div>
-          <div>
-            <p className="font-medium" style={{ color: '#2D1A0E' }}>connect Google Calendar</p>
-            <p className="text-sm mt-1" style={{ color: '#9B8E84' }}>we'll read your week's events and plan outfits around them</p>
-          </div>
-          <a
-            href={`${API}/api/auth/connect-calendar`}
-            className="rounded-full px-6 py-2.5 text-sm font-medium transition-all"
-            style={{ backgroundColor: '#2D1A0E', color: '#FAF7F2' }}
-          >
-            connect Google Calendar →
-          </a>
-          <p className="text-xs" style={{ color: '#C4B5AC' }}>read-only access · we never modify your calendar</p>
-        </div>
-      </div>
-    )
-  }
+  const anyOccasion = DAYS.some(d => occasions[d])
 
   return (
     <div className="space-y-8 max-w-2xl">
@@ -217,7 +169,7 @@ export default function WeekPlanner() {
         <p className="text-sm mt-1" style={{ color: '#9B8E84' }}>
           {weather
             ? `${weatherEmoji(weather.description)} ${weather.city} · ${Math.round(weather.temp_fahrenheit)}°F this week`
-            : 'outfits planned around your calendar — every look unique'
+            : 'tell me what you have going on — i'll plan every look'
           }
         </p>
       </div>
@@ -239,7 +191,9 @@ export default function WeekPlanner() {
                 className="text-xs rounded-full px-3 py-1.5 border shrink-0 flex items-center gap-1.5 disabled:opacity-60"
                 style={{ borderColor: '#E3D9CE', color: '#9B8E84' }}
               >
-                {locating ? <span className="w-3 h-3 rounded-full border border-[#E3D9CE] border-t-[#8B1A1A] animate-spin inline-block" /> : '📍'}
+                {locating
+                  ? <span className="w-3 h-3 rounded-full border border-[#E3D9CE] border-t-[#8B1A1A] animate-spin inline-block" />
+                  : '📍'}
                 {locating ? 'locating…' : 'my location'}
               </button>
               <span className="text-xs" style={{ color: '#C4B5AC' }}>or</span>
@@ -255,60 +209,80 @@ export default function WeekPlanner() {
         </div>
       )}
 
-      {/* Loading calendar */}
-      {loadingCal && (
-        <div className="flex justify-center py-12"><ClothesLoader label="loading your week…" /></div>
-      )}
-
-      {/* Week grid */}
-      {!loadingCal && displayDays.length > 0 && (
-        <>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {displayDays.map(day => (
+      {/* Day grid */}
+      <div className="space-y-3">
+        {!generated && (
+          <p className="text-xs uppercase tracking-widest" style={{ color: '#9B8E84' }}>your week</p>
+        )}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          {DAYS.map((day, i) => (
+            <div key={day} className="space-y-1.5">
               <DayCard
-                key={day.date}
                 day={day}
-                onOccasionChange={(date, val) => setUserOccasions(p => ({ ...p, [date]: val }))}
+                date={weekDates[i]}
+                occasion={occasions[day]}
+                onOccasionChange={val => setOccasion(day, val)}
+                outfitData={weekData.find(w => w.day === day)}
+                expanded={expandedDay === day}
+                onToggleExpand={() => setExpandedDay(p => p === day ? null : day)}
               />
-            ))}
-          </div>
-
-          {error && (
-            <p className="text-sm rounded-xl px-4 py-3 border" style={{ color: '#6B1010', backgroundColor: '#F0DADA', borderColor: '#E8CECE' }}>
-              {error}
-            </p>
-          )}
-
-          {!generated ? (
-            <button
-              onClick={handleGenerate}
-              disabled={generating || !hasLocation}
-              className="flex items-center gap-2 rounded-full px-7 py-3 text-sm font-medium transition-all disabled:opacity-40"
-              style={{ backgroundColor: '#2D1A0E', color: '#FAF7F2' }}
-            >
-              {generating && <div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />}
-              {generating ? 'planning your week…' : 'plan my week →'}
-            </button>
-          ) : (
-            <div className="flex items-center gap-3">
-              <p className="text-sm" style={{ color: '#7A9E7A' }}>✓ week planned</p>
-              <button
-                onClick={() => { setGenerated(false); setWeekData([]) }}
-                className="text-xs rounded-full px-3 py-1.5 border"
-                style={{ borderColor: '#E3D9CE', color: '#9B8E84' }}
-              >
-                regenerate
-              </button>
+              {/* Quick fill chips — only show before generation */}
+              {!generated && (
+                <div className="flex flex-wrap gap-1">
+                  {QUICK_FILL.map(chip => (
+                    <button
+                      key={chip}
+                      onClick={() => setOccasion(day, occasions[day] === chip ? '' : chip)}
+                      className="text-[10px] px-2 py-0.5 rounded-full border transition-all"
+                      style={{
+                        borderColor: occasions[day] === chip ? '#8B1A1A' : '#E3D9CE',
+                        backgroundColor: occasions[day] === chip ? '#F0DADA' : 'transparent',
+                        color: occasions[day] === chip ? '#6B1010' : '#9B8E84',
+                      }}
+                    >
+                      {chip}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
-        </>
+          ))}
+        </div>
+      </div>
+
+      {error && (
+        <p className="text-sm rounded-xl px-4 py-3 border" style={{ color: '#6B1010', backgroundColor: '#F0DADA', borderColor: '#E8CECE' }}>
+          {error}
+        </p>
       )}
 
-      {/* Empty state — no calendar days */}
-      {!loadingCal && displayDays.length === 0 && calConnected && (
-        <div className="text-center py-16 space-y-2">
-          <p className="serif-italic text-xl" style={{ color: '#C4B5AC' }}>calendar loaded, no events this week</p>
-          <p className="text-sm" style={{ color: '#C4B5AC' }}>add events in Google Calendar and come back</p>
+      {/* CTA */}
+      {!generated ? (
+        <button
+          onClick={handleGenerate}
+          disabled={generating || !hasLocation || !anyOccasion}
+          className="flex items-center gap-2 rounded-full px-7 py-3 text-sm font-medium transition-all disabled:opacity-40"
+          style={{ backgroundColor: '#2D1A0E', color: '#FAF7F2' }}
+        >
+          {generating && <div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />}
+          {generating ? 'planning your week…' : 'plan my week →'}
+        </button>
+      ) : (
+        <div className="flex items-center gap-3">
+          <p className="text-sm" style={{ color: '#7A9E7A' }}>✓ week planned</p>
+          <button
+            onClick={handleReset}
+            className="text-xs rounded-full px-3 py-1.5 border"
+            style={{ borderColor: '#E3D9CE', color: '#9B8E84' }}
+          >
+            start over
+          </button>
+        </div>
+      )}
+
+      {generating && (
+        <div className="flex justify-center py-6">
+          <ClothesLoader label="building your week…" />
         </div>
       )}
     </div>
