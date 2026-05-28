@@ -169,7 +169,7 @@ export default function WeekPlanner() {
         <p className="text-sm mt-1" style={{ color: '#9B8E84' }}>
           {weather
             ? `${weatherEmoji(weather.description)} ${weather.city} · ${Math.round(weather.temp_fahrenheit)}°F this week`
-            : 'tell me what you have going on — i'll plan every look'
+            : "tell me what you have going on — i'll plan every look"
           }
         </p>
       </div>
