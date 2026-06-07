@@ -247,6 +247,50 @@ def analyze_inspo_image(image_path: str) -> dict:
         raise RuntimeError(f"AI inspo analysis failed: {exc}") from exc
 
 
+def auto_categorize_inspo(inspo_items: list[dict]) -> list[dict]:
+    """
+    Analyze inspo photos and group them into 2-6 named style vibes.
+    inspo_items: [{"id": int, "style_notes": str}, ...]
+    Returns: [{"label": "Minimalist", "ids": [1, 2, 3]}, ...]
+    """
+    if not inspo_items:
+        return []
+
+    client = _get_client()
+
+    items_text = "\n".join(
+        f"Photo {item['id']}: {item['style_notes'] or 'no description'}"
+        for item in inspo_items
+    )
+
+    prompt = (
+        "You are a fashion stylist organizing a client's inspiration photos into aesthetic vibes.\n\n"
+        f"Style descriptions:\n{items_text}\n\n"
+        "Group these photos into 2–5 distinct style vibes based on their aesthetic.\n"
+        "Use simple evocative names like: minimalist, going out, work, Y2K, coastal, cozy, dark academia, romantic, streetwear, date night, editorial, boho, preppy, etc.\n"
+        "Every photo ID must appear in exactly one category.\n"
+        "Only create a category if at least 2 photos fit it — otherwise fold them into the closest existing vibe.\n\n"
+        'Return JSON: {"categories": [{"label": "vibe name", "ids": [list of integer photo IDs]}]}\n'
+        "Return ONLY valid JSON. No markdown."
+    )
+
+    message = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=512,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    raw = message.content[0].text.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
+
+    result = json.loads(raw)
+    return result.get("categories", [])
+
+
 def suggest_personalized_outfit(
     wardrobe_items: list[dict],
     inspo_context: str,

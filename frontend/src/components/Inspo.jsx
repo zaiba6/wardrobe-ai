@@ -184,11 +184,13 @@ export default function Inspo() {
   const [lookError, setLookError] = useState('')
   const [lookSaved, setLookSaved] = useState(false)
 
-  // Style boards state
-  const [styleBoards, setStyleBoards]       = useState([])
-  const [activeBoard, setActiveBoard]       = useState(null)   // board id filter
-  const [creatingBoard, setCreatingBoard]   = useState(false)
-  const [newBoardLabel, setNewBoardLabel]   = useState('')
+  // Vibes (auto-categorized inspo groups)
+  const [styleBoards, setStyleBoards]         = useState([])
+  const [activeBoard, setActiveBoard]         = useState(null)
+  const [categorizing, setCategorizing]       = useState(false)
+  const [categorizeError, setCategorizeError] = useState('')
+  const [editingBoard, setEditingBoard]       = useState(null)  // id being renamed
+  const [editingLabel, setEditingLabel]       = useState('')
   const [boardRulesInput, setBoardRulesInput] = useState('')
 
   const fetchInspo = async () => {
@@ -362,15 +364,29 @@ export default function Inspo() {
     }
   }
 
-  const handleCreateBoard = async () => {
-    const label = newBoardLabel.trim()
+  const handleAutoCategorize = async () => {
+    setCategorizing(true)
+    setCategorizeError('')
+    try {
+      const res = await axios.post(`${API}/api/inspo/auto-categorize`)
+      setStyleBoards(res.data.vibes)
+      setInspoItems(res.data.items)
+      setActiveBoard(null)
+    } catch (err) {
+      setCategorizeError(err.response?.data?.detail || 'Could not organize — try again')
+    } finally {
+      setCategorizing(false)
+    }
+  }
+
+  const handleRenameBoard = async (boardId) => {
+    const label = editingLabel.trim()
+    setEditingBoard(null)
+    setEditingLabel('')
     if (!label) return
     try {
-      const res = await axios.post(`${API}/api/style-boards`, { label })
-      setStyleBoards(p => [...p, res.data])
-      setActiveBoard(res.data.id)
-      setNewBoardLabel('')
-      setCreatingBoard(false)
+      const res = await axios.patch(`${API}/api/style-boards/${boardId}`, { label })
+      setStyleBoards(p => p.map(b => b.id === boardId ? { ...b, label: res.data.label } : b))
     } catch { /* silent */ }
   }
 
@@ -405,107 +421,136 @@ export default function Inspo() {
         </p>
       </div>
 
-      {/* Style Boards */}
-      <div className="space-y-3">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h3 className="serif text-lg" style={{ color: '#2D1A0E' }}>style boards</h3>
-            <p className="text-xs mt-0.5" style={{ color: '#9B8E84' }}>
-              create event types with your own rules — the ai follows them when planning outfits
-            </p>
-          </div>
-          {!creatingBoard && (
-            <button
-              onClick={() => setCreatingBoard(true)}
-              className="text-xs rounded-full px-3 py-1.5 border shrink-0 transition-all"
-              style={{ borderColor: '#E3D9CE', color: '#9B8E84' }}
-            >+ new board</button>
-          )}
-        </div>
-
-        {/* Board chips */}
-        {(styleBoards.length > 0 || creatingBoard) && (
-          <div className="flex gap-2 flex-wrap items-center">
-            <button
-              onClick={() => setActiveBoard(null)}
-              className="text-xs rounded-full px-3 py-1.5 border transition-all"
-              style={{
-                borderColor: !activeBoard ? '#8B1A1A' : '#E3D9CE',
-                backgroundColor: !activeBoard ? '#F0DADA' : 'transparent',
-                color: !activeBoard ? '#6B1010' : '#9B8E84',
-              }}
-            >all</button>
-            {styleBoards.map(board => (
-              <div key={board.id} className="group relative flex items-center">
+      {/* Vibes — auto-categorized inspo groups */}
+      {inspoItems.length >= 2 && (
+        <div className="space-y-3">
+          {styleBoards.length === 0 ? (
+            /* First time — show organize CTA */
+            <div className="rounded-2xl border p-5 flex items-center justify-between gap-4" style={{ backgroundColor: '#fff', borderColor: '#E3D9CE' }}>
+              <div>
+                <p className="text-sm font-medium" style={{ color: '#2D1A0E' }}>categorize my pins</p>
+                <p className="text-xs mt-0.5" style={{ color: '#9B8E84' }}>
+                  let the ai read your inspo and group it into vibes automatically
+                </p>
+                {categorizeError && (
+                  <p className="text-xs mt-1" style={{ color: '#8B1A1A' }}>{categorizeError}</p>
+                )}
+              </div>
+              <button
+                onClick={handleAutoCategorize}
+                disabled={categorizing}
+                className="shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-all disabled:opacity-50 flex items-center gap-2"
+                style={{ backgroundColor: '#2D1A0E', color: '#FAF7F2' }}
+              >
+                {categorizing && <span className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin" />}
+                {categorizing ? 'organizing…' : '✦ organize →'}
+              </button>
+            </div>
+          ) : (
+            /* Vibes exist — show chips + re-organize option */
+            <>
+              <div className="flex items-center justify-between">
+                <p className="text-xs uppercase tracking-widest" style={{ color: '#9B8E84' }}>your vibes</p>
                 <button
-                  onClick={() => setActiveBoard(board.id === activeBoard ? null : board.id)}
+                  onClick={handleAutoCategorize}
+                  disabled={categorizing}
+                  className="text-xs disabled:opacity-50 flex items-center gap-1"
+                  style={{ color: '#C4B5AC' }}
+                >
+                  {categorizing && <span className="w-2.5 h-2.5 rounded-full border border-[#C4B5AC] border-t-[#9B8E84] animate-spin" />}
+                  {categorizing ? 're-organizing…' : '↻ re-organize'}
+                </button>
+              </div>
+
+              {categorizeError && (
+                <p className="text-xs" style={{ color: '#8B1A1A' }}>{categorizeError}</p>
+              )}
+
+              <div className="flex flex-wrap gap-2 items-center">
+                {/* All chip */}
+                <button
+                  onClick={() => setActiveBoard(null)}
                   className="text-xs rounded-full px-3 py-1.5 border transition-all"
                   style={{
-                    borderColor: activeBoard === board.id ? '#8B1A1A' : '#E3D9CE',
-                    backgroundColor: activeBoard === board.id ? '#F0DADA' : 'transparent',
-                    color: activeBoard === board.id ? '#6B1010' : '#9B8E84',
-                    paddingRight: '1.75rem',
+                    borderColor: !activeBoard ? '#8B1A1A' : '#E3D9CE',
+                    backgroundColor: !activeBoard ? '#F0DADA' : 'transparent',
+                    color: !activeBoard ? '#6B1010' : '#9B8E84',
                   }}
-                >{board.label}</button>
-                <button
-                  onClick={() => handleDeleteBoard(board.id)}
-                  className="absolute right-1.5 opacity-0 group-hover:opacity-100 text-xs leading-none transition-opacity"
-                  style={{ color: '#C4B5AC' }}
-                >×</button>
+                >all</button>
+
+                {/* Vibe chips */}
+                {styleBoards.map(board => {
+                  const count   = inspoItems.filter(i => i.style_board_id === board.id).length
+                  const isActive = activeBoard === board.id
+                  return (
+                    <div key={board.id} className="group relative flex items-center">
+                      {editingBoard === board.id ? (
+                        <input
+                          autoFocus
+                          value={editingLabel}
+                          onChange={e => setEditingLabel(e.target.value)}
+                          onBlur={() => handleRenameBoard(board.id)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') handleRenameBoard(board.id)
+                            if (e.key === 'Escape') { setEditingBoard(null); setEditingLabel('') }
+                          }}
+                          className="text-xs rounded-full px-3 py-1.5 border bg-transparent focus:outline-none"
+                          style={{ borderColor: '#8B1A1A', color: '#2D1A0E', minWidth: '5rem' }}
+                        />
+                      ) : (
+                        <button
+                          onClick={() => setActiveBoard(board.id === activeBoard ? null : board.id)}
+                          onDoubleClick={() => { setEditingBoard(board.id); setEditingLabel(board.label) }}
+                          title="double-click to rename"
+                          className="text-xs rounded-full px-3 py-1.5 border transition-all"
+                          style={{
+                            borderColor: isActive ? '#8B1A1A' : '#E3D9CE',
+                            backgroundColor: isActive ? '#F0DADA' : 'transparent',
+                            color: isActive ? '#6B1010' : '#9B8E84',
+                            paddingRight: '1.5rem',
+                          }}
+                        >
+                          {board.label}
+                          {count > 0 && <span className="ml-1 opacity-40 text-[9px]">{count}</span>}
+                        </button>
+                      )}
+                      {editingBoard !== board.id && (
+                        <button
+                          onClick={() => handleDeleteBoard(board.id)}
+                          className="absolute right-1 opacity-0 group-hover:opacity-100 text-xs leading-none transition-opacity"
+                          style={{ color: '#C4B5AC' }}
+                        >×</button>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
-            ))}
-          </div>
-        )}
 
-        {/* New board creation */}
-        {creatingBoard && (
-          <div className="flex items-center gap-2">
-            <input
-              autoFocus
-              value={newBoardLabel}
-              onChange={e => setNewBoardLabel(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') handleCreateBoard()
-                if (e.key === 'Escape') { setCreatingBoard(false); setNewBoardLabel('') }
-              }}
-              placeholder="board name (e.g. Work, Date Night, Wedding Guest)…"
-              className="flex-1 border-b text-sm bg-transparent focus:outline-none pb-1"
-              style={{ borderColor: '#8B1A1A', color: '#2D1A0E' }}
-            />
-            <button
-              onClick={handleCreateBoard}
-              className="text-xs rounded-full px-3 py-1.5 border shrink-0"
-              style={{ borderColor: '#8B1A1A', color: '#8B1A1A' }}
-            >create</button>
-            <button
-              onClick={() => { setCreatingBoard(false); setNewBoardLabel('') }}
-              className="text-xs shrink-0"
-              style={{ color: '#C4B5AC' }}
-            >cancel</button>
-          </div>
-        )}
-
-        {/* Rules editor for active board */}
-        {activeBoard && (
-          <div className="rounded-xl border p-3.5 space-y-2" style={{ borderColor: '#E3D9CE', backgroundColor: '#fff' }}>
-            <p className="text-[11px] uppercase tracking-widest" style={{ color: '#9B8E84' }}>
-              style rules for {styleBoards.find(b => b.id === activeBoard)?.label}
-            </p>
-            <textarea
-              value={boardRulesInput}
-              onChange={e => setBoardRulesInput(e.target.value)}
-              onBlur={handleSaveBoardRules}
-              placeholder="e.g. formal only, no short skirts, blazers required, heels or loafers only…"
-              rows={3}
-              className="w-full text-sm bg-transparent focus:outline-none resize-none"
-              style={{ color: '#4A3020' }}
-            />
-            <p className="text-[10px]" style={{ color: '#C4B5AC' }}>
-              auto-saved on blur · the ai applies these when you plan a "{styleBoards.find(b => b.id === activeBoard)?.label}" day · tag inspo photos below to add aesthetic context
-            </p>
-          </div>
-        )}
-      </div>
+              {/* Rules editor for active vibe (for outfit AI context) */}
+              {activeBoard && (
+                <div className="rounded-xl border p-3.5 space-y-2" style={{ borderColor: '#E3D9CE', backgroundColor: '#fff' }}>
+                  <p className="text-[11px] uppercase tracking-widest" style={{ color: '#9B8E84' }}>
+                    outfit rules for {styleBoards.find(b => b.id === activeBoard)?.label}
+                    <span className="normal-case ml-1 tracking-normal" style={{ color: '#C4B5AC' }}>· optional</span>
+                  </p>
+                  <textarea
+                    value={boardRulesInput}
+                    onChange={e => setBoardRulesInput(e.target.value)}
+                    onBlur={handleSaveBoardRules}
+                    placeholder="e.g. formal only, no short skirts, blazers preferred… leave blank to let the ai decide"
+                    rows={2}
+                    className="w-full text-sm bg-transparent focus:outline-none resize-none"
+                    style={{ color: '#4A3020' }}
+                  />
+                  <p className="text-[10px]" style={{ color: '#C4B5AC' }}>
+                    auto-saved · the ai applies these when you plan a "{styleBoards.find(b => b.id === activeBoard)?.label}" day in the week planner
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {/* Pinterest board import */}
       <div className="rounded-2xl border p-5 space-y-3" style={{ backgroundColor: '#fff', borderColor: '#E3D9CE' }}>

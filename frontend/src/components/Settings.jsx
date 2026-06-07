@@ -222,12 +222,12 @@ export default function Settings() {
         {saveMsg && <p className="text-xs" style={{ color: '#7A9E7A' }}>✓ rules saved</p>}
       </section>
 
-      {/* ── Preset Event Boards ── */}
+      {/* ── Preset Event Vibes ── */}
       <section className="space-y-4">
         <div>
-          <h3 className="serif text-xl" style={{ color: '#2D1A0E' }}>preset event boards</h3>
+          <h3 className="serif text-xl" style={{ color: '#2D1A0E' }}>preset event vibes</h3>
           <p className="text-sm mt-0.5" style={{ color: '#9B8E84' }}>
-            quick-create style boards for common occasions — rules come pre-filled, you can edit them in the inspo tab
+            quick-add vibes for common occasions with pre-filled rules — the ai follows them when you plan that day
           </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -244,7 +244,7 @@ export default function Settings() {
                   <p className="text-sm font-medium" style={{ color: '#2D1A0E' }}>{preset.label}</p>
                   {exists ? (
                     <span className="text-[10px] rounded-full px-2.5 py-0.5" style={{ backgroundColor: '#F0F7F0', color: '#7A9E7A' }}>
-                      ✓ created
+                      ✓ added
                     </span>
                   ) : (
                     <button
@@ -253,7 +253,7 @@ export default function Settings() {
                       className="text-xs rounded-full px-3 py-1 border transition-all disabled:opacity-50"
                       style={{ borderColor: '#8B1A1A', color: '#8B1A1A' }}
                     >
-                      {creating ? '…' : '+ create'}
+                      {creating ? '…' : '+ add'}
                     </button>
                   )}
                 </div>
@@ -264,7 +264,7 @@ export default function Settings() {
         </div>
         {boards.length > 0 && (
           <p className="text-xs" style={{ color: '#C4B5AC' }}>
-            edit rules and tag inspo photos in the inspo board tab
+            rules auto-apply when you plan that event in the week planner
           </p>
         )}
       </section>

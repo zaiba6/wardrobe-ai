@@ -20,7 +20,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from ai import analyze_inspo_image, detect_all_items, suggest_personalized_outfit, suggest_vibe_outfit, tag_clothing_image
+from ai import analyze_inspo_image, auto_categorize_inspo, detect_all_items, suggest_personalized_outfit, suggest_vibe_outfit, tag_clothing_image
 from taxonomy import VALID_SUBTYPES as SUBTYPES
 from auth import (
     GOOGLE_AUTH_URL, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
@@ -1228,6 +1228,56 @@ def import_inspo_from_url(
     )
     db.add(item); db.commit(); db.refresh(item)
     return serialize_inspo(item)
+
+
+@app.post("/api/inspo/auto-categorize")
+def inspo_auto_categorize(user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    """Use Claude to group all inspo photos into named style vibes."""
+    items = db.query(InspoItem).filter(InspoItem.user_id == user_id).all()
+    if len(items) < 2:
+        raise HTTPException(status_code=400, detail="Upload at least 2 inspo photos first.")
+
+    inspo_data = [{"id": it.id, "style_notes": it.style_notes or ""} for it in items if it.style_notes]
+    if not inspo_data:
+        raise HTTPException(status_code=400, detail="Photos haven't finished analyzing yet — wait a moment and try again.")
+
+    try:
+        categories = auto_categorize_inspo(inspo_data)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"AI categorization failed: {exc}")
+
+    if not categories:
+        raise HTTPException(status_code=500, detail="Could not generate categories — try again.")
+
+    # Wipe existing vibes (unassign items, delete boards)
+    existing = db.query(StyleBoard).filter(StyleBoard.user_id == user_id).all()
+    for board in existing:
+        db.query(InspoItem).filter(
+            InspoItem.user_id == user_id, InspoItem.style_board_id == board.id
+        ).update({"style_board_id": None})
+        db.delete(board)
+    db.commit()
+
+    # Create new vibes and assign photos
+    created = []
+    for cat in categories:
+        label = (cat.get("label") or "").strip()
+        ids   = cat.get("ids", [])
+        if not label:
+            continue
+        board = StyleBoard(user_id=user_id, label=label, rules=None)
+        db.add(board)
+        db.flush()
+        for inspo_id in ids:
+            db.query(InspoItem).filter(
+                InspoItem.id == inspo_id, InspoItem.user_id == user_id
+            ).update({"style_board_id": board.id})
+        created.append({"id": board.id, "label": board.label, "rules": board.rules})
+    db.commit()
+
+    # Return updated inspo items so frontend can refresh assignments
+    updated_items = [serialize_inspo(it) for it in db.query(InspoItem).filter(InspoItem.user_id == user_id).all()]
+    return {"vibes": created, "items": updated_items}
 
 
 def _split_occasions(text: str) -> list[str]:
