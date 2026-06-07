@@ -44,7 +44,18 @@ class InspoItem(Base):
     items_detected = Column(Text, nullable=True)
     style_notes    = Column(Text, nullable=True)
     source_url     = Column(String, nullable=True, index=True)  # original Pinterest CDN URL
+    style_board_id = Column(Integer, nullable=True)             # FK → style_boards.id
     created_at     = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class StyleBoard(Base):
+    __tablename__ = "style_boards"
+
+    id         = Column(Integer, primary_key=True, index=True)
+    user_id    = Column(Integer, nullable=False, index=True)
+    label      = Column(String, nullable=False)   # e.g. "Work", "Date Night"
+    rules      = Column(Text, nullable=True)      # free-text rules injected into AI prompt
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 class OutfitFeedback(Base):

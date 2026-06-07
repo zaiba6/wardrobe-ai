@@ -29,7 +29,7 @@ from auth import (
     get_or_create_user, CALENDAR_SCOPES,
 )
 from database import Base, engine, get_db
-from models import ClothingItem, InspoItem, OutfitLog, OutfitFeedback, User, UserPreset
+from models import ClothingItem, InspoItem, OutfitLog, OutfitFeedback, User, UserPreset, StyleBoard
 from weather import get_weather, get_weather_by_coords
 
 load_dotenv()
@@ -49,6 +49,8 @@ _MIGRATIONS = [
     "ALTER TABLE users ADD COLUMN google_access_token VARCHAR",
     "ALTER TABLE users ADD COLUMN google_refresh_token VARCHAR",
     "ALTER TABLE users ADD COLUMN google_token_expiry DATETIME",
+    "CREATE TABLE IF NOT EXISTS style_boards (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, label VARCHAR NOT NULL, rules TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)",
+    "ALTER TABLE inspo_items ADD COLUMN style_board_id INTEGER",
 ]
 with engine.connect() as _conn:
     for _stmt in _MIGRATIONS:
@@ -121,6 +123,7 @@ def serialize_inspo(item: InspoItem) -> dict:
         "image_url": f"/uploads/{item.filename}",
         "items_detected": json.loads(item.items_detected or "[]"),
         "style_notes": item.style_notes,
+        "style_board_id": item.style_board_id,
         "created_at": item.created_at.isoformat(),
     }
 
@@ -568,6 +571,80 @@ def delete_photo(filename: str, user_id: int = Depends(get_current_user_id), db:
 
 
 # ---------------------------------------------------------------------------
+# Style boards
+# ---------------------------------------------------------------------------
+
+def _find_matching_board(occasion: str | None, boards: list) -> object | None:
+    """Fuzzy-match occasion text to a StyleBoard by label."""
+    if not occasion or not boards:
+        return None
+    occ_lower = occasion.lower()
+    for board in boards:
+        if board.label.lower() in occ_lower or occ_lower in board.label.lower():
+            return board
+    return None
+
+
+class StyleBoardCreate(BaseModel):
+    label: str
+    rules: Optional[str] = None
+
+
+class StyleBoardUpdate(BaseModel):
+    label: Optional[str] = None
+    rules: Optional[str] = None
+
+
+class InspoAssignBoard(BaseModel):
+    board_id: Optional[int] = None
+
+
+@app.get("/api/style-boards")
+def list_style_boards(user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    boards = db.query(StyleBoard).filter(StyleBoard.user_id == user_id).order_by(StyleBoard.created_at).all()
+    return [{"id": b.id, "label": b.label, "rules": b.rules} for b in boards]
+
+
+@app.post("/api/style-boards")
+def create_style_board(body: StyleBoardCreate, user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    board = StyleBoard(user_id=user_id, label=body.label.strip(), rules=body.rules)
+    db.add(board); db.commit(); db.refresh(board)
+    return {"id": board.id, "label": board.label, "rules": board.rules}
+
+
+@app.patch("/api/style-boards/{board_id}")
+def update_style_board(board_id: int, body: StyleBoardUpdate, user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    board = db.query(StyleBoard).filter(StyleBoard.id == board_id, StyleBoard.user_id == user_id).first()
+    if not board:
+        raise HTTPException(status_code=404, detail="Board not found")
+    if body.label is not None:
+        board.label = body.label.strip()
+    if body.rules is not None:
+        board.rules = body.rules
+    db.commit()
+    return {"id": board.id, "label": board.label, "rules": board.rules}
+
+
+@app.delete("/api/style-boards/{board_id}")
+def delete_style_board(board_id: int, user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    board = db.query(StyleBoard).filter(StyleBoard.id == board_id, StyleBoard.user_id == user_id).first()
+    if not board:
+        raise HTTPException(status_code=404, detail="Board not found")
+    db.delete(board); db.commit()
+    return {"ok": True}
+
+
+@app.post("/api/inspo/{inspo_id}/board")
+def assign_inspo_to_board(inspo_id: int, body: InspoAssignBoard, user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    item = db.query(InspoItem).filter(InspoItem.id == inspo_id, InspoItem.user_id == user_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Inspo item not found")
+    item.style_board_id = body.board_id
+    db.commit()
+    return {"ok": True, "board_id": body.board_id}
+
+
+# ---------------------------------------------------------------------------
 # Outfit suggestion (mood-based)
 # ---------------------------------------------------------------------------
 
@@ -638,6 +715,17 @@ def suggest_outfit(body: OutfitSuggestBody, user_id: int = Depends(get_current_u
         for c in all_clothes
     ]
 
+    # Style board rules for this occasion
+    style_boards  = db.query(StyleBoard).filter(StyleBoard.user_id == user_id).all()
+    board         = _find_matching_board(body.occasion, style_boards)
+    board_rules   = board.rules if board else None
+    board_inspo_ctx = ""
+    if board:
+        board_items = db.query(InspoItem).filter(
+            InspoItem.user_id == user_id, InspoItem.style_board_id == board.id
+        ).all()
+        board_inspo_ctx = "; ".join(i.style_notes for i in board_items if i.style_notes)[:500]
+
     reason   = "Here's a look for you!"
     selected = []
     try:
@@ -649,6 +737,8 @@ def suggest_outfit(body: OutfitSuggestBody, user_id: int = Depends(get_current_u
             weather=weather,
             exclude_ids=body.exclude_ids,
             bad_combos=bad_combos,
+            board_rules=board_rules,
+            board_inspo=board_inspo_ctx,
         )
         id_order = {iid: idx for idx, iid in enumerate(item_ids)}
         selected = sorted(
@@ -1057,9 +1147,16 @@ def import_inspo_from_url(
     return serialize_inspo(item)
 
 
+def _split_occasions(text: str) -> list[str]:
+    """'brunch and dinner' → ['brunch', 'dinner']"""
+    import re
+    parts = re.split(r'\s*(?:and then|and|then|,|&)\s*', text, flags=re.IGNORECASE)
+    return [p.strip() for p in parts if p.strip()]
+
+
 @app.post("/api/outfit/week-plan")
 def week_plan(body: WeekPlanBody, user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
-    """Generate unique daily outfits for a Mon-Sun plan."""
+    """Generate unique daily outfits for a Mon-Sun plan. Supports multiple events per day."""
     all_clothes = db.query(ClothingItem).filter(ClothingItem.user_id == user_id).all()
     if not all_clothes:
         raise HTTPException(status_code=400, detail="Your wardrobe is empty — upload some clothes first!")
@@ -1071,6 +1168,8 @@ def week_plan(body: WeekPlanBody, user_id: int = Depends(get_current_user_id), d
         OutfitFeedback.user_id == user_id, OutfitFeedback.feedback == "bad"
     ).order_by(OutfitFeedback.created_at.desc()).limit(20).all()
     bad_combos = [json.loads(r.item_descs) for r in bad_recs if r.item_descs]
+
+    style_boards = db.query(StyleBoard).filter(StyleBoard.user_id == user_id).all()
 
     wardrobe_summary = [
         {"id": c.id, "type": c.type, "subtype": c.subtype, "color": c.color,
@@ -1091,47 +1190,61 @@ def week_plan(body: WeekPlanBody, user_id: int = Depends(get_current_user_id), d
     results = []
 
     for day in body.days:
-        # Build occasion text from events or user input
         if day.events:
-            occasion = ", ".join(day.events)
+            occasion_raw = ", ".join(day.events)
         elif day.occasion:
-            occasion = day.occasion
+            occasion_raw = day.occasion
         else:
             results.append({
                 "date": day.date, "day": day.day,
                 "events": [], "occasion": None,
-                "outfit": None, "needs_input": True,
+                "outfits": [], "needs_input": True,
             })
             continue
 
-        try:
-            item_ids, reason = suggest_personalized_outfit(
-                wardrobe_items=wardrobe_summary,
-                inspo_context=inspo_context,
-                mood=body.mood or "ready for the day",
-                occasion=occasion,
-                weather=weather,
-                exclude_ids=used_ids,
-                bad_combos=bad_combos,
-            )
-            used_ids.extend(item_ids)
-            id_order = {iid: idx for idx, iid in enumerate(item_ids)}
-            selected = sorted(
-                [c for c in all_clothes if c.id in set(item_ids)],
-                key=lambda c: id_order.get(c.id, 999),
-            )
-            results.append({
-                "date": day.date, "day": day.day,
-                "events": day.events, "occasion": occasion,
-                "outfit": {"items": [serialize_clothing(c) for c in selected], "reason": reason},
-                "needs_input": False,
-            })
-        except Exception:
-            results.append({
-                "date": day.date, "day": day.day,
-                "events": day.events, "occasion": occasion,
-                "outfit": None, "needs_input": False,
-            })
+        sub_occasions = _split_occasions(occasion_raw)
+        day_outfits = []
+
+        for sub_occ in sub_occasions:
+            board     = _find_matching_board(sub_occ, style_boards)
+            b_rules   = board.rules if board else None
+            b_inspo   = ""
+            if board:
+                b_items = db.query(InspoItem).filter(
+                    InspoItem.user_id == user_id, InspoItem.style_board_id == board.id
+                ).all()
+                b_inspo = "; ".join(i.style_notes for i in b_items if i.style_notes)[:500]
+            try:
+                item_ids, reason = suggest_personalized_outfit(
+                    wardrobe_items=wardrobe_summary,
+                    inspo_context=inspo_context,
+                    mood=body.mood or "ready for the day",
+                    occasion=sub_occ,
+                    weather=weather,
+                    exclude_ids=used_ids,
+                    bad_combos=bad_combos,
+                    board_rules=b_rules,
+                    board_inspo=b_inspo,
+                )
+                used_ids.extend(item_ids)
+                id_order = {iid: idx for idx, iid in enumerate(item_ids)}
+                selected = sorted(
+                    [c for c in all_clothes if c.id in set(item_ids)],
+                    key=lambda c: id_order.get(c.id, 999),
+                )
+                day_outfits.append({
+                    "items": [serialize_clothing(c) for c in selected],
+                    "reason": reason,
+                    "occasion": sub_occ,
+                })
+            except Exception:
+                pass
+
+        results.append({
+            "date": day.date, "day": day.day,
+            "events": day.events, "occasion": occasion_raw,
+            "outfits": day_outfits, "needs_input": False,
+        })
 
     return {"week": results, "weather": weather}
 

@@ -255,6 +255,8 @@ def suggest_personalized_outfit(
     weather: dict,
     exclude_ids: list[int] | None = None,
     bad_combos: list[list[str]] | None = None,
+    board_rules: str | None = None,
+    board_inspo: str | None = None,
 ) -> tuple[list[int], str]:
     """Pick one outfit using Claude, informed by the user's inspo aesthetic and mood."""
     if not wardrobe_items:
@@ -274,8 +276,13 @@ def suggest_personalized_outfit(
     temp_f    = weather["temp_fahrenheit"]
     condition = weather["description"]
 
-    inspo_line   = f"User's personal style from their inspo board:\n{inspo_context}\n\n" if inspo_context else ""
+    inspo_line    = f"User's personal style from their inspo board:\n{inspo_context}\n\n" if inspo_context else ""
     occasion_line = f"Occasion: {occasion}.\n" if occasion else ""
+    board_section = ""
+    if board_rules:
+        board_section += f"PERSONAL STYLE RULES FOR THIS OCCASION (set by the user — follow strictly):\n{board_rules}\n\n"
+    if board_inspo:
+        board_section += f"PERSONAL INSPO AESTHETIC FOR THIS OCCASION:\n{board_inspo}\n\n"
 
     rules = get_rules_for_prompt(occasion)
 
@@ -294,6 +301,7 @@ def suggest_personalized_outfit(
         f"{occasion_line}"
         f"Current weather: {temp_c}°C ({temp_f}°F), {condition}.\n\n"
         f"{bad_combos_line}"
+        f"{board_section}"
         f"{rules}\n\n"
         "Additional styling guidance:\n"
         "- Match the inspo aesthetic as closely as possible using what they own.\n"

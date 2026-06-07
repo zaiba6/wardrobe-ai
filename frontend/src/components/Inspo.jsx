@@ -4,9 +4,11 @@ import ClothesLoader from './ClothesLoader'
 
 const API = import.meta.env.VITE_API_URL ?? ''
 
-function InspoCard({ item, selected, onToggle, onDelete }) {
-  const [hovered, setHovered] = useState(false)
+function InspoCard({ item, selected, onToggle, onDelete, boards, onAssignBoard }) {
+  const [hovered, setHovered]           = useState(false)
+  const [showBoardPicker, setShowBoardPicker] = useState(false)
   const detectedText = item.items_detected?.map(d => d.type).join(' · ')
+  const assignedBoard = boards?.find(b => b.id === item.style_board_id)
 
   return (
     <div
@@ -16,9 +18,9 @@ function InspoCard({ item, selected, onToggle, onDelete }) {
         borderColor: selected ? '#8B1A1A' : '#E3D9CE',
         boxShadow: selected ? '0 0 0 2px #8B1A1A' : 'none',
       }}
-      onClick={() => onToggle(item.id)}
+      onClick={() => { if (!showBoardPicker) onToggle(item.id) }}
       onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseLeave={() => { setHovered(false); setShowBoardPicker(false) }}
     >
       {/* Selection indicator */}
       <div
@@ -37,26 +39,71 @@ function InspoCard({ item, selected, onToggle, onDelete }) {
 
       <div className="aspect-square relative overflow-hidden" style={{ backgroundColor: '#F0EAE2' }}>
         <img src={`${API}${item.image_url}`} alt="inspo" className="w-full h-full object-cover" />
-        {hovered && item.items_detected?.length > 0 && (
+        {hovered && item.items_detected?.length > 0 && !showBoardPicker && (
           <div className="absolute inset-0 flex flex-col justify-end p-3" style={{ backgroundColor: 'rgba(45,26,14,0.6)' }}>
             <p className="text-white text-xs leading-relaxed">{detectedText}</p>
           </div>
         )}
-        {hovered && (
-          <button
-            onClick={e => { e.stopPropagation(); onDelete(item.id) }}
-            className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center"
-            style={{ backgroundColor: 'rgba(250,247,242,0.9)', color: '#9B8E84' }}
+        {/* Board picker overlay */}
+        {showBoardPicker && (
+          <div
+            className="absolute inset-0 z-20 flex flex-col justify-end p-2 gap-1"
+            style={{ backgroundColor: 'rgba(250,247,242,0.96)' }}
+            onClick={e => e.stopPropagation()}
           >
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+            <p className="text-[10px] uppercase tracking-widest mb-1" style={{ color: '#9B8E84' }}>assign to board</p>
+            <button
+              onClick={() => { onAssignBoard(item.id, null); setShowBoardPicker(false) }}
+              className="text-[10px] rounded-full px-2 py-0.5 border text-left"
+              style={{
+                borderColor: !item.style_board_id ? '#8B1A1A' : '#E3D9CE',
+                backgroundColor: !item.style_board_id ? '#F0DADA' : 'transparent',
+                color: !item.style_board_id ? '#6B1010' : '#9B8E84',
+              }}
+            >none</button>
+            {boards?.map(b => (
+              <button
+                key={b.id}
+                onClick={() => { onAssignBoard(item.id, b.id); setShowBoardPicker(false) }}
+                className="text-[10px] rounded-full px-2 py-0.5 border text-left"
+                style={{
+                  borderColor: item.style_board_id === b.id ? '#8B1A1A' : '#E3D9CE',
+                  backgroundColor: item.style_board_id === b.id ? '#F0DADA' : 'transparent',
+                  color: item.style_board_id === b.id ? '#6B1010' : '#9B8E84',
+                }}
+              >{b.label}</button>
+            ))}
+          </div>
+        )}
+        {hovered && !showBoardPicker && (
+          <>
+            <button
+              onClick={e => { e.stopPropagation(); onDelete(item.id) }}
+              className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center"
+              style={{ backgroundColor: 'rgba(250,247,242,0.9)', color: '#9B8E84' }}
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            {boards?.length > 0 && (
+              <button
+                onClick={e => { e.stopPropagation(); setShowBoardPicker(true) }}
+                className="absolute bottom-2 right-2 rounded-full px-2 py-0.5 text-[10px] flex items-center gap-0.5"
+                style={{ backgroundColor: 'rgba(250,247,242,0.9)', color: '#9B8E84' }}
+              >🏷 board</button>
+            )}
+          </>
         )}
       </div>
-      {item.style_notes && (
-        <div className="px-3 py-2">
-          <p className="text-xs italic line-clamp-2" style={{ color: '#9B8E84' }}>{item.style_notes}</p>
+      {(item.style_notes || assignedBoard) && (
+        <div className="px-3 py-2 space-y-1">
+          {assignedBoard && (
+            <p className="text-[10px] font-medium" style={{ color: '#8B1A1A' }}>🏷 {assignedBoard.label}</p>
+          )}
+          {item.style_notes && (
+            <p className="text-xs italic line-clamp-2" style={{ color: '#9B8E84' }}>{item.style_notes}</p>
+          )}
         </div>
       )}
     </div>
@@ -115,10 +162,10 @@ export default function Inspo() {
 
   // Pinterest import state
   const [pinterestUrl, setPinterestUrl]   = useState('')
-  const [boardList, setBoardList]         = useState([])   // list of URLs queued to import
+  const [boardList, setBoardList]         = useState([])
   const [importing, setImporting]         = useState(false)
-  const [importProgress, setImportProgress] = useState(null) // { current, total, count }
-  const [importMsg, setImportMsg]         = useState(null)  // { ok: bool, text: str }
+  const [importProgress, setImportProgress] = useState(null)
+  const [importMsg, setImportMsg]         = useState(null)
 
   // Direct image URL import fallback
   const [imageUrlInput, setImageUrlInput] = useState('')
@@ -137,6 +184,13 @@ export default function Inspo() {
   const [lookError, setLookError] = useState('')
   const [lookSaved, setLookSaved] = useState(false)
 
+  // Style boards state
+  const [styleBoards, setStyleBoards]       = useState([])
+  const [activeBoard, setActiveBoard]       = useState(null)   // board id filter
+  const [creatingBoard, setCreatingBoard]   = useState(false)
+  const [newBoardLabel, setNewBoardLabel]   = useState('')
+  const [boardRulesInput, setBoardRulesInput] = useState('')
+
   const fetchInspo = async () => {
     setLoadingInspo(true)
     try { const res = await axios.get(`${API}/api/inspo`); setInspoItems(res.data) }
@@ -149,7 +203,20 @@ export default function Inspo() {
     finally { setLoadingRecs(false) }
   }
 
-  useEffect(() => { fetchInspo(); fetchRecs() }, [])
+  const fetchBoards = async () => {
+    try { const res = await axios.get(`${API}/api/style-boards`); setStyleBoards(res.data) }
+    catch { /* silent */ }
+  }
+
+  useEffect(() => { fetchInspo(); fetchRecs(); fetchBoards() }, [])
+
+  // Sync rules editor when active board changes
+  useEffect(() => {
+    if (activeBoard) {
+      const board = styleBoards.find(b => b.id === activeBoard)
+      setBoardRulesInput(board?.rules || '')
+    }
+  }, [activeBoard, styleBoards])
 
   const [uploadStatus, setUploadStatus] = useState('')
 
@@ -295,6 +362,37 @@ export default function Inspo() {
     }
   }
 
+  const handleCreateBoard = async () => {
+    const label = newBoardLabel.trim()
+    if (!label) return
+    try {
+      const res = await axios.post(`${API}/api/style-boards`, { label })
+      setStyleBoards(p => [...p, res.data])
+      setActiveBoard(res.data.id)
+      setNewBoardLabel('')
+      setCreatingBoard(false)
+    } catch { /* silent */ }
+  }
+
+  const handleDeleteBoard = async (boardId) => {
+    await axios.delete(`${API}/api/style-boards/${boardId}`)
+    setStyleBoards(p => p.filter(b => b.id !== boardId))
+    if (activeBoard === boardId) setActiveBoard(null)
+  }
+
+  const handleSaveBoardRules = async () => {
+    if (!activeBoard) return
+    try {
+      const res = await axios.patch(`${API}/api/style-boards/${activeBoard}`, { rules: boardRulesInput })
+      setStyleBoards(p => p.map(b => b.id === activeBoard ? { ...b, rules: res.data.rules } : b))
+    } catch { /* silent */ }
+  }
+
+  const handleAssignBoard = async (inspoId, boardId) => {
+    await axios.post(`${API}/api/inspo/${inspoId}/board`, { board_id: boardId })
+    setInspoItems(p => p.map(item => item.id === inspoId ? { ...item, style_board_id: boardId } : item))
+  }
+
   const clearSelection = () => { setSelectedIds(new Set()); setShowLookPanel(false); setLookResult(null) }
 
   return (
@@ -305,6 +403,108 @@ export default function Inspo() {
         <p className="text-sm mt-1" style={{ color: '#9B8E84' }}>
           save what inspires you — select up to 10 to get a look for today
         </p>
+      </div>
+
+      {/* Style Boards */}
+      <div className="space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="serif text-lg" style={{ color: '#2D1A0E' }}>style boards</h3>
+            <p className="text-xs mt-0.5" style={{ color: '#9B8E84' }}>
+              create event types with your own rules — the ai follows them when planning outfits
+            </p>
+          </div>
+          {!creatingBoard && (
+            <button
+              onClick={() => setCreatingBoard(true)}
+              className="text-xs rounded-full px-3 py-1.5 border shrink-0 transition-all"
+              style={{ borderColor: '#E3D9CE', color: '#9B8E84' }}
+            >+ new board</button>
+          )}
+        </div>
+
+        {/* Board chips */}
+        {(styleBoards.length > 0 || creatingBoard) && (
+          <div className="flex gap-2 flex-wrap items-center">
+            <button
+              onClick={() => setActiveBoard(null)}
+              className="text-xs rounded-full px-3 py-1.5 border transition-all"
+              style={{
+                borderColor: !activeBoard ? '#8B1A1A' : '#E3D9CE',
+                backgroundColor: !activeBoard ? '#F0DADA' : 'transparent',
+                color: !activeBoard ? '#6B1010' : '#9B8E84',
+              }}
+            >all</button>
+            {styleBoards.map(board => (
+              <div key={board.id} className="group relative flex items-center">
+                <button
+                  onClick={() => setActiveBoard(board.id === activeBoard ? null : board.id)}
+                  className="text-xs rounded-full px-3 py-1.5 border transition-all"
+                  style={{
+                    borderColor: activeBoard === board.id ? '#8B1A1A' : '#E3D9CE',
+                    backgroundColor: activeBoard === board.id ? '#F0DADA' : 'transparent',
+                    color: activeBoard === board.id ? '#6B1010' : '#9B8E84',
+                    paddingRight: '1.75rem',
+                  }}
+                >{board.label}</button>
+                <button
+                  onClick={() => handleDeleteBoard(board.id)}
+                  className="absolute right-1.5 opacity-0 group-hover:opacity-100 text-xs leading-none transition-opacity"
+                  style={{ color: '#C4B5AC' }}
+                >×</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* New board creation */}
+        {creatingBoard && (
+          <div className="flex items-center gap-2">
+            <input
+              autoFocus
+              value={newBoardLabel}
+              onChange={e => setNewBoardLabel(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleCreateBoard()
+                if (e.key === 'Escape') { setCreatingBoard(false); setNewBoardLabel('') }
+              }}
+              placeholder="board name (e.g. Work, Date Night, Wedding Guest)…"
+              className="flex-1 border-b text-sm bg-transparent focus:outline-none pb-1"
+              style={{ borderColor: '#8B1A1A', color: '#2D1A0E' }}
+            />
+            <button
+              onClick={handleCreateBoard}
+              className="text-xs rounded-full px-3 py-1.5 border shrink-0"
+              style={{ borderColor: '#8B1A1A', color: '#8B1A1A' }}
+            >create</button>
+            <button
+              onClick={() => { setCreatingBoard(false); setNewBoardLabel('') }}
+              className="text-xs shrink-0"
+              style={{ color: '#C4B5AC' }}
+            >cancel</button>
+          </div>
+        )}
+
+        {/* Rules editor for active board */}
+        {activeBoard && (
+          <div className="rounded-xl border p-3.5 space-y-2" style={{ borderColor: '#E3D9CE', backgroundColor: '#fff' }}>
+            <p className="text-[11px] uppercase tracking-widest" style={{ color: '#9B8E84' }}>
+              style rules for {styleBoards.find(b => b.id === activeBoard)?.label}
+            </p>
+            <textarea
+              value={boardRulesInput}
+              onChange={e => setBoardRulesInput(e.target.value)}
+              onBlur={handleSaveBoardRules}
+              placeholder="e.g. formal only, no short skirts, blazers required, heels or loafers only…"
+              rows={3}
+              className="w-full text-sm bg-transparent focus:outline-none resize-none"
+              style={{ color: '#4A3020' }}
+            />
+            <p className="text-[10px]" style={{ color: '#C4B5AC' }}>
+              auto-saved on blur · the ai applies these when you plan a "{styleBoards.find(b => b.id === activeBoard)?.label}" day · tag inspo photos below to add aesthetic context
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Pinterest board import */}
@@ -566,12 +766,45 @@ export default function Inspo() {
 
       {/* Grid */}
       <div className="space-y-4">
-        {inspoItems.length > 0 && (
-          <div className="flex items-center justify-between">
-            <h3 className="serif text-lg" style={{ color: '#2D1A0E' }}>saved</h3>
-            <span className="text-xs" style={{ color: '#9B8E84' }}>{inspoItems.length} images</span>
-          </div>
-        )}
+        {inspoItems.length > 0 && (() => {
+          const filtered = activeBoard
+            ? inspoItems.filter(i => i.style_board_id === activeBoard)
+            : inspoItems
+          const boardName = styleBoards.find(b => b.id === activeBoard)?.label
+          return (
+            <>
+              <div className="flex items-center justify-between">
+                <h3 className="serif text-lg" style={{ color: '#2D1A0E' }}>
+                  {boardName ? `${boardName} inspo` : 'saved'}
+                </h3>
+                <span className="text-xs" style={{ color: '#9B8E84' }}>
+                  {filtered.length}{activeBoard ? ` / ${inspoItems.length}` : ''} images
+                </span>
+              </div>
+              {filtered.length === 0 && (
+                <div className="text-center py-12 space-y-1">
+                  <p className="serif-italic text-lg" style={{ color: '#C4B5AC' }}>no inspo tagged to {boardName} yet</p>
+                  <p className="text-xs" style={{ color: '#C4B5AC' }}>hover any image below → "🏷 board" to tag it</p>
+                </div>
+              )}
+              {filtered.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {filtered.map(item => (
+                    <InspoCard
+                      key={item.id}
+                      item={item}
+                      selected={selectedIds.has(item.id)}
+                      onToggle={toggleSelect}
+                      onDelete={handleDelete}
+                      boards={styleBoards}
+                      onAssignBoard={handleAssignBoard}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
+          )
+        })()}
 
         {loadingInspo ? (
           <div className="flex justify-center py-20">
@@ -582,19 +815,7 @@ export default function Inspo() {
             <p className="serif-italic text-2xl" style={{ color: '#C4B5AC' }}>nothing saved yet</p>
             <p className="text-sm" style={{ color: '#C4B5AC' }}>upload screenshots from pinterest, instagram, anywhere</p>
           </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {inspoItems.map(item => (
-              <InspoCard
-                key={item.id}
-                item={item}
-                selected={selectedIds.has(item.id)}
-                onToggle={toggleSelect}
-                onDelete={handleDelete}
-              />
-            ))}
-          </div>
-        )}
+        ) : null}
       </div>
     </div>
   )
