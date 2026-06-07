@@ -6,7 +6,6 @@ const API = import.meta.env.VITE_API_URL ?? ''
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 const DAY_SHORT = { Monday: 'Mon', Tuesday: 'Tue', Wednesday: 'Wed', Thursday: 'Thu', Friday: 'Fri', Saturday: 'Sat', Sunday: 'Sun' }
-
 const QUICK_FILL = ['work', 'gym', 'date night', 'going out', 'errands', 'wfh', 'brunch', 'travel', 'drinks', 'dinner']
 
 function weatherEmoji(condition = '') {
@@ -30,114 +29,106 @@ function getWeekDates() {
   })
 }
 
-function OutfitMini({ items }) {
-  if (!items?.length) return null
-  return (
-    <div className="flex gap-1 flex-wrap mt-1.5">
-      {items.slice(0, 4).map((item, i) => (
-        <div key={item.id ?? i} className="w-11 h-11 rounded-lg overflow-hidden shrink-0" style={{ backgroundColor: '#F0EAE2' }}>
-          <img src={`${API}${item.image_url}`} alt={item.type} className="w-full h-full object-cover" />
-        </div>
-      ))}
-      {items.length > 4 && (
-        <div className="w-11 h-11 rounded-lg flex items-center justify-center text-xs shrink-0" style={{ backgroundColor: '#F0EAE2', color: '#9B8E84' }}>
-          +{items.length - 4}
-        </div>
-      )}
-    </div>
-  )
+function outfitLine(items) {
+  return items.map(item => item.subtype || item.type).join(' + ')
 }
 
-function DayCard({ day, date, tags, onAddTag, onRemoveTag, outfitData, generated, expanded, onToggleExpand }) {
+function DayCard({ day, date, tags, onAddTag, onRemoveTag, outfitData, generated, onFocus }) {
   const [inputVal, setInputVal] = useState('')
   const outfits  = outfitData?.outfits ?? []
   const hasOutfit = outfits.length > 0
-  const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  const today    = new Date().toISOString().slice(0, 10)
+  const isToday  = date === today
+  const dateObj  = new Date(date + 'T12:00:00')
+  const dateLabel = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
-  const submitInput = () => {
+  const commit = () => {
     const val = inputVal.trim()
     if (!val) return
-    onAddTag(val)
+    val.split(',').map(s => s.trim()).filter(Boolean).forEach(onAddTag)
     setInputVal('')
   }
 
   return (
     <div
-      className="rounded-2xl border p-3.5 space-y-2 transition-all"
+      className="rounded-xl border flex flex-col overflow-hidden"
       style={{
-        backgroundColor: hasOutfit ? '#fff' : '#FAF7F2',
-        borderColor: hasOutfit ? '#D4C5C5' : '#E3D9CE',
+        backgroundColor: '#fff',
+        borderColor: isToday ? '#C4A8A8' : hasOutfit ? '#D4C5C5' : '#E3D9CE',
+        minHeight: '120px',
       }}
     >
-      {/* Header */}
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-medium" style={{ color: '#2D1A0E' }}>
-          {DAY_SHORT[day]}
-          <span className="text-xs font-normal ml-1.5" style={{ color: '#C4B5AC' }}>{dateLabel}</span>
-        </p>
-        {hasOutfit && (
-          <button onClick={onToggleExpand} className="text-[10px] shrink-0" style={{ color: '#C4B5AC' }}>
-            {expanded ? 'less' : 'details'}
-          </button>
-        )}
+      {/* Day header */}
+      <div
+        className="px-2 pt-2 pb-1 border-b shrink-0"
+        style={{
+          borderColor: isToday ? '#C4A8A8' : '#E3D9CE',
+          backgroundColor: isToday ? '#F5E8E8' : 'transparent',
+        }}
+      >
+        <p className="text-[11px] font-semibold" style={{ color: '#2D1A0E' }}>{DAY_SHORT[day]}</p>
+        <p className="text-[9px]" style={{ color: '#C4B5AC' }}>{dateLabel}</p>
       </div>
 
-      {/* After generation */}
-      {generated && hasOutfit && (
-        <div className="space-y-3">
-          {outfits.map((outfit, i) => (
-            <div key={i}>
-              {outfits.length > 1 && (
-                <p className="text-[10px] capitalize mb-0.5" style={{ color: '#C4B5AC' }}>{outfit.occasion}</p>
-              )}
-              <OutfitMini items={outfit.items} />
-              {expanded && outfit.reason && (
-                <p className="text-[11px] italic mt-1" style={{ color: '#9B8E84' }}>{outfit.reason}</p>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {generated && !hasOutfit && (
-        <p className="text-xs" style={{ color: '#C4B5AC' }}>rest day</p>
-      )}
-
-      {/* Before generation: tag input */}
-      {!generated && (
-        <div className="space-y-2">
-          {/* Selected tags as removable pills */}
-          {tags.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {tags.map(tag => (
-                <span
-                  key={tag}
-                  className="flex items-center gap-0.5 text-[10px] rounded-full px-2 py-0.5 border"
-                  style={{ borderColor: '#8B1A1A', backgroundColor: '#F0DADA', color: '#6B1010' }}
-                >
-                  {tag}
-                  <button
-                    onClick={() => onRemoveTag(tag)}
-                    className="ml-0.5 leading-none hover:text-red-700"
-                    style={{ color: '#9B6060' }}
-                  >×</button>
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* Text input */}
-          <input
-            value={inputVal}
-            onChange={e => setInputVal(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submitInput() } }}
-            onBlur={submitInput}
-            placeholder={tags.length === 0 ? "what's going on?" : "+ add another event…"}
-            className="w-full text-xs bg-transparent border-b focus:outline-none pb-1"
-            style={{ borderColor: inputVal ? '#8B1A1A' : '#E3D9CE', color: '#2D1A0E' }}
-          />
-        </div>
-      )}
+      {/* Body */}
+      <div className="p-2 flex-1 space-y-1.5">
+        {generated ? (
+          hasOutfit ? (
+            outfits.map((outfit, i) => (
+              <div
+                key={i}
+                className={i > 0 ? 'pt-1.5 mt-1.5 border-t' : ''}
+                style={{ borderColor: '#E3D9CE' }}
+              >
+                {outfits.length > 1 && (
+                  <p className="text-[9px] uppercase tracking-wider mb-0.5" style={{ color: '#C4B5AC' }}>
+                    {outfit.occasion}
+                  </p>
+                )}
+                <p className="text-[11px] leading-relaxed" style={{ color: '#4A3020' }}>
+                  {outfitLine(outfit.items)}
+                </p>
+              </div>
+            ))
+          ) : (
+            <p className="text-[10px]" style={{ color: '#C4B5AC' }}>rest day</p>
+          )
+        ) : (
+          <>
+            {tags.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {tags.map(tag => (
+                  <span
+                    key={tag}
+                    className="flex items-center gap-0.5 text-[10px] rounded-full px-1.5 py-0.5 border"
+                    style={{ borderColor: '#8B1A1A', backgroundColor: '#F0DADA', color: '#6B1010' }}
+                  >
+                    {tag}
+                    <button
+                      onClick={() => onRemoveTag(tag)}
+                      className="leading-none hover:text-red-700"
+                      style={{ color: '#9B6060' }}
+                    >×</button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <input
+              value={inputVal}
+              onChange={e => setInputVal(e.target.value)}
+              onFocus={onFocus}
+              onKeyDown={e => {
+                if (e.key === 'Enter') { e.preventDefault(); commit() }
+                if (e.key === ',') { e.preventDefault(); commit() }
+              }}
+              onBlur={commit}
+              placeholder={tags.length === 0 ? 'add event…' : '+'}
+              className="w-full text-[11px] bg-transparent border-b focus:outline-none pb-0.5"
+              style={{ borderColor: inputVal ? '#8B1A1A' : '#E3D9CE', color: '#2D1A0E' }}
+            />
+          </>
+        )}
+      </div>
     </div>
   )
 }
@@ -145,33 +136,30 @@ function DayCard({ day, date, tags, onAddTag, onRemoveTag, outfitData, generated
 export default function WeekPlanner() {
   const weekDates = getWeekDates()
 
-  // dayTags: { Monday: ['work', 'drinks'], Tuesday: [], ... }
-  const [dayTags, setDayTags]         = useState(Object.fromEntries(DAYS.map(d => [d, []])))
-  const [city, setCity]               = useState('')
-  const [coords, setCoords]           = useState(null)
-  const [locating, setLocating]       = useState(false)
-  const [generating, setGenerating]   = useState(false)
-  const [weekData, setWeekData]       = useState([])
-  const [weather, setWeather]         = useState(null)
-  const [error, setError]             = useState('')
-  const [generated, setGenerated]     = useState(false)
-  const [expandedDay, setExpandedDay] = useState(null)
+  const [dayTags, setDayTags]       = useState(Object.fromEntries(DAYS.map(d => [d, []])))
+  const [city, setCity]             = useState('')
+  const [coords, setCoords]         = useState(null)
+  const [locating, setLocating]     = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [weekData, setWeekData]     = useState([])
+  const [weather, setWeather]       = useState(null)
+  const [error, setError]           = useState('')
+  const [generated, setGenerated]   = useState(false)
+  const [focusedDay, setFocusedDay] = useState(null)
 
   const addTag = (day, tag) => {
     const clean = tag.trim().toLowerCase()
     if (!clean) return
-    setDayTags(p => ({
-      ...p,
-      [day]: p[day].includes(clean) ? p[day] : [...p[day], clean],
-    }))
+    setDayTags(p => ({ ...p, [day]: p[day].includes(clean) ? p[day] : [...p[day], clean] }))
   }
 
   const removeTag = (day, tag) => {
     setDayTags(p => ({ ...p, [day]: p[day].filter(t => t !== tag) }))
   }
 
-  const toggleChip = (day, chip) => {
-    dayTags[day].includes(chip) ? removeTag(day, chip) : addTag(day, chip)
+  const toggleChip = (chip) => {
+    if (!focusedDay) return
+    dayTags[focusedDay].includes(chip) ? removeTag(focusedDay, chip) : addTag(focusedDay, chip)
   }
 
   const handleGetLocation = () => {
@@ -192,6 +180,7 @@ export default function WeekPlanner() {
     }))
     setGenerating(true)
     setError('')
+    setFocusedDay(null)
     try {
       const locationPayload = coords
         ? { lat: coords.lat, lon: coords.lon }
@@ -212,7 +201,7 @@ export default function WeekPlanner() {
     setWeekData([])
     setWeather(null)
     setError('')
-    setExpandedDay(null)
+    setFocusedDay(null)
     setDayTags(Object.fromEntries(DAYS.map(d => [d, []])))
   }
 
@@ -221,30 +210,30 @@ export default function WeekPlanner() {
   const getOutfitData = (day) => weekData.find(w => w.day === day) ?? null
 
   return (
-    <div className="space-y-8 max-w-2xl">
+    <div className="space-y-6 max-w-2xl">
+      {/* Header */}
       <div>
         <h2 className="serif-italic text-3xl leading-snug" style={{ color: '#2D1A0E' }}>week planner</h2>
         <p className="text-sm mt-1" style={{ color: '#9B8E84' }}>
           {weather
             ? `${weatherEmoji(weather.description)} ${weather.city} · ${Math.round(weather.temp_fahrenheit)}°F this week`
-            : "add as many events per day as you want — i'll plan a separate fit for each"
+            : "tap a day and add your events, then i'll plan each look"
           }
         </p>
       </div>
 
-      {/* Location */}
+      {/* Location — compact row, hidden after generation */}
       {!generated && (
-        <div className="rounded-xl border px-4 py-3 space-y-2" style={{ backgroundColor: '#fff', borderColor: '#E3D9CE' }}>
-          <p className="text-xs uppercase tracking-widest" style={{ color: '#9B8E84' }}>your location this week</p>
+        <div className="flex items-center gap-2">
           {coords ? (
-            <div className="flex items-center gap-2">
-              <span className="text-xs px-2.5 py-1 rounded-full border flex-1" style={{ borderColor: '#8B1A1A', backgroundColor: '#F0DADA', color: '#6B1010' }}>
-                📍 location detected
+            <>
+              <span className="text-xs px-2.5 py-1 rounded-full border flex items-center gap-1" style={{ borderColor: '#8B1A1A', backgroundColor: '#F0DADA', color: '#6B1010' }}>
+                📍 detected
               </span>
               <button onClick={() => setCoords(null)} className="text-xs" style={{ color: '#C4B5AC' }}>change ×</button>
-            </div>
+            </>
           ) : (
-            <div className="flex items-center gap-2">
+            <>
               <button
                 onClick={handleGetLocation}
                 disabled={locating}
@@ -254,67 +243,64 @@ export default function WeekPlanner() {
                 {locating
                   ? <span className="w-3 h-3 rounded-full border border-[#E3D9CE] border-t-[#8B1A1A] animate-spin inline-block" />
                   : '📍'}
-                {locating ? 'locating…' : 'my location'}
+                {locating ? 'locating…' : 'location'}
               </button>
-              <span className="text-xs" style={{ color: '#C4B5AC' }}>or</span>
               <input
                 value={city}
                 onChange={e => setCity(e.target.value)}
-                placeholder="city…"
+                placeholder="or type your city…"
                 className="flex-1 text-sm bg-transparent border-b focus:outline-none pb-1"
                 style={{ borderColor: city ? '#8B1A1A' : '#E3D9CE', color: '#2D1A0E' }}
               />
-            </div>
+            </>
           )}
         </div>
       )}
 
-      {/* Day grid */}
-      <div className="space-y-3">
-        {!generated && (
-          <p className="text-xs uppercase tracking-widest" style={{ color: '#9B8E84' }}>your week</p>
-        )}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {DAYS.map((day, i) => (
-            <div key={day} className="space-y-1.5">
-              <DayCard
-                day={day}
-                date={weekDates[i]}
-                tags={dayTags[day]}
-                onAddTag={tag => addTag(day, tag)}
-                onRemoveTag={tag => removeTag(day, tag)}
-                outfitData={getOutfitData(day)}
-                generated={generated}
-                expanded={expandedDay === day}
-                onToggleExpand={() => setExpandedDay(p => p === day ? null : day)}
-              />
-
-              {/* Quick fill chips — additive, shown before generation */}
-              {!generated && (
-                <div className="flex flex-wrap gap-1">
-                  {QUICK_FILL.map(chip => {
-                    const active = dayTags[day].includes(chip)
-                    return (
-                      <button
-                        key={chip}
-                        onClick={() => toggleChip(day, chip)}
-                        className="text-[10px] px-2 py-0.5 rounded-full border transition-all"
-                        style={{
-                          borderColor: active ? '#8B1A1A' : '#E3D9CE',
-                          backgroundColor: active ? '#F0DADA' : 'transparent',
-                          color: active ? '#6B1010' : '#9B8E84',
-                        }}
-                      >
-                        {chip}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+      {/* Calendar grid */}
+      <div className="grid grid-cols-7 gap-1.5">
+        {DAYS.map((day, i) => (
+          <DayCard
+            key={day}
+            day={day}
+            date={weekDates[i]}
+            tags={dayTags[day]}
+            onAddTag={tag => addTag(day, tag)}
+            onRemoveTag={tag => removeTag(day, tag)}
+            outfitData={getOutfitData(day)}
+            generated={generated}
+            onFocus={() => setFocusedDay(day)}
+          />
+        ))}
       </div>
+
+      {/* Quick-fill chips — shared, shown when a day is focused */}
+      {!generated && focusedDay && (
+        <div className="space-y-2 rounded-xl border p-3" style={{ backgroundColor: '#FAF7F2', borderColor: '#E3D9CE' }}>
+          <p className="text-[10px] uppercase tracking-widest" style={{ color: '#C4B5AC' }}>
+            adding to {focusedDay.toLowerCase()}
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {QUICK_FILL.map(chip => {
+              const active = dayTags[focusedDay]?.includes(chip)
+              return (
+                <button
+                  key={chip}
+                  onClick={() => toggleChip(chip)}
+                  className="text-[11px] px-2.5 py-1 rounded-full border transition-all"
+                  style={{
+                    borderColor: active ? '#8B1A1A' : '#E3D9CE',
+                    backgroundColor: active ? '#F0DADA' : '#fff',
+                    color: active ? '#6B1010' : '#9B8E84',
+                  }}
+                >
+                  {chip}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {error && (
         <p className="text-sm rounded-xl px-4 py-3 border" style={{ color: '#6B1010', backgroundColor: '#F0DADA', borderColor: '#E8CECE' }}>
@@ -328,11 +314,12 @@ export default function WeekPlanner() {
         </div>
       )}
 
+      {/* CTA */}
       {!generated ? (
         <button
           onClick={handleGenerate}
           disabled={generating || !hasLocation || !anyOccasion}
-          className="flex items-center gap-2 rounded-full px-7 py-3 text-sm font-medium transition-all disabled:opacity-40"
+          className="flex items-center gap-2 rounded-full px-7 py-3 text-sm font-medium disabled:opacity-40"
           style={{ backgroundColor: '#2D1A0E', color: '#FAF7F2' }}
         >
           {generating && <div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />}
@@ -340,7 +327,7 @@ export default function WeekPlanner() {
         </button>
       ) : (
         <div className="flex items-center gap-3">
-          <p className="text-sm" style={{ color: '#7A9E7A' }}>week planned</p>
+          <p className="text-sm" style={{ color: '#7A9E7A' }}>✓ week planned</p>
           <button
             onClick={handleReset}
             className="text-xs rounded-full px-3 py-1.5 border"
