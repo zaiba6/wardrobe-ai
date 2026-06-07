@@ -247,14 +247,15 @@ def analyze_inspo_image(image_path: str) -> dict:
         raise RuntimeError(f"AI inspo analysis failed: {exc}") from exc
 
 
-def auto_categorize_inspo(inspo_items: list[dict]) -> list[dict]:
+def auto_categorize_inspo(inspo_items: list[dict]) -> dict:
     """
-    Analyze inspo photos and group them into 2-6 named style vibes.
+    Analyze inspo photos and group them into events → aesthetic sub-vibes.
     inspo_items: [{"id": int, "style_notes": str}, ...]
-    Returns: [{"label": "Minimalist", "ids": [1, 2, 3]}, ...]
+    Returns:
+      {"events": [{"event": "Work", "vibes": [{"label": "quiet luxury", "ids": [1,2]}, ...]}, ...]}
     """
     if not inspo_items:
-        return []
+        return {"events": []}
 
     client = _get_client()
 
@@ -264,19 +265,21 @@ def auto_categorize_inspo(inspo_items: list[dict]) -> list[dict]:
     )
 
     prompt = (
-        "You are a fashion stylist organizing a client's inspiration photos into aesthetic vibes.\n\n"
-        f"Style descriptions:\n{items_text}\n\n"
-        "Group these photos into 2–5 distinct style vibes based on their aesthetic.\n"
-        "Use simple evocative names like: minimalist, going out, work, Y2K, coastal, cozy, dark academia, romantic, streetwear, date night, editorial, boho, preppy, etc.\n"
-        "Every photo ID must appear in exactly one category.\n"
-        "Only create a category if at least 2 photos fit it — otherwise fold them into the closest existing vibe.\n\n"
-        'Return JSON: {"categories": [{"label": "vibe name", "ids": [list of integer photo IDs]}]}\n'
+        "You are a fashion stylist organizing a client's inspiration photos into a two-level system.\n\n"
+        f"Photo descriptions:\n{items_text}\n\n"
+        "STEP 1 — GROUP BY LIFE EVENT: Assign every photo to one of these events (or create a new one if needed): "
+        "Work, Date Night, Going Out, Gym, Brunch, Weekend, Travel, Casual.\n"
+        "Only create an event that at least 1 photo genuinely fits. If all photos share one event, use one event.\n\n"
+        "STEP 2 — AESTHETIC SUB-VIBES: Within each event, group photos by aesthetic sub-vibe "
+        "(e.g. quiet luxury, business casual, romantic, edgy, streetwear, boho, minimalist, y2k, coastal, preppy, dark academia, cozy).\n"
+        "Each event needs 1-3 sub-vibes. Every photo must appear in exactly one sub-vibe.\n\n"
+        'Return JSON: {"events": [{"event": "Work", "vibes": [{"label": "quiet luxury", "ids": [1, 3]}, {"label": "business casual", "ids": [2]}]}, ...]}\n'
         "Return ONLY valid JSON. No markdown."
     )
 
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
-        max_tokens=512,
+        max_tokens=800,
         messages=[{"role": "user", "content": prompt}],
     )
 
@@ -288,7 +291,7 @@ def auto_categorize_inspo(inspo_items: list[dict]) -> list[dict]:
         raw = raw.strip()
 
     result = json.loads(raw)
-    return result.get("categories", [])
+    return result if "events" in result else {"events": []}
 
 
 def suggest_personalized_outfit(

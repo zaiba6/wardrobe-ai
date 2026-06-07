@@ -53,8 +53,9 @@ class StyleBoard(Base):
 
     id         = Column(Integer, primary_key=True, index=True)
     user_id    = Column(Integer, nullable=False, index=True)
-    label      = Column(String, nullable=False)   # e.g. "Work", "Date Night"
+    label      = Column(String, nullable=False)   # e.g. "Work", "Date Night" / "quiet luxury"
     rules      = Column(Text, nullable=True)      # free-text rules injected into AI prompt
+    parent_id  = Column(Integer, nullable=True)   # null = event board; non-null = sub-vibe under that event
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 

@@ -52,6 +52,7 @@ _MIGRATIONS = [
     "CREATE TABLE IF NOT EXISTS style_boards (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, label VARCHAR NOT NULL, rules TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)",
     "ALTER TABLE inspo_items ADD COLUMN style_board_id INTEGER",
     "CREATE TABLE IF NOT EXISTS user_settings (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL UNIQUE, style_vibes TEXT, disabled_rules TEXT, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)",
+    "ALTER TABLE style_boards ADD COLUMN parent_id INTEGER",
 ]
 with engine.connect() as _conn:
     for _stmt in _MIGRATIONS:
@@ -652,19 +653,22 @@ def get_rule_definitions():
 # ---------------------------------------------------------------------------
 
 def _find_matching_board(occasion: str | None, boards: list) -> object | None:
-    """Fuzzy-match occasion text to a StyleBoard by label."""
+    """Fuzzy-match occasion text to a top-level (event) StyleBoard by label."""
     if not occasion or not boards:
         return None
     occ_lower = occasion.lower()
-    for board in boards:
+    # Only match event-level boards (parent_id is None)
+    event_boards = [b for b in boards if getattr(b, "parent_id", None) is None]
+    for board in event_boards:
         if board.label.lower() in occ_lower or occ_lower in board.label.lower():
             return board
     return None
 
 
 class StyleBoardCreate(BaseModel):
-    label: str
-    rules: Optional[str] = None
+    label:     str
+    rules:     Optional[str] = None
+    parent_id: Optional[int] = None
 
 
 class StyleBoardUpdate(BaseModel):
@@ -679,14 +683,14 @@ class InspoAssignBoard(BaseModel):
 @app.get("/api/style-boards")
 def list_style_boards(user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
     boards = db.query(StyleBoard).filter(StyleBoard.user_id == user_id).order_by(StyleBoard.created_at).all()
-    return [{"id": b.id, "label": b.label, "rules": b.rules} for b in boards]
+    return [{"id": b.id, "label": b.label, "rules": b.rules, "parent_id": b.parent_id} for b in boards]
 
 
 @app.post("/api/style-boards")
 def create_style_board(body: StyleBoardCreate, user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
-    board = StyleBoard(user_id=user_id, label=body.label.strip(), rules=body.rules)
+    board = StyleBoard(user_id=user_id, label=body.label.strip(), rules=body.rules, parent_id=body.parent_id)
     db.add(board); db.commit(); db.refresh(board)
-    return {"id": board.id, "label": board.label, "rules": board.rules}
+    return {"id": board.id, "label": board.label, "rules": board.rules, "parent_id": board.parent_id}
 
 
 @app.patch("/api/style-boards/{board_id}")
@@ -699,7 +703,7 @@ def update_style_board(board_id: int, body: StyleBoardUpdate, user_id: int = Dep
     if body.rules is not None:
         board.rules = body.rules
     db.commit()
-    return {"id": board.id, "label": board.label, "rules": board.rules}
+    return {"id": board.id, "label": board.label, "rules": board.rules, "parent_id": board.parent_id}
 
 
 @app.delete("/api/style-boards/{board_id}")
@@ -707,7 +711,22 @@ def delete_style_board(board_id: int, user_id: int = Depends(get_current_user_id
     board = db.query(StyleBoard).filter(StyleBoard.id == board_id, StyleBoard.user_id == user_id).first()
     if not board:
         raise HTTPException(status_code=404, detail="Board not found")
-    db.delete(board); db.commit()
+    # If this is an event board (parent_id=None), cascade-delete all its sub-vibes
+    if board.parent_id is None:
+        children = db.query(StyleBoard).filter(
+            StyleBoard.parent_id == board_id, StyleBoard.user_id == user_id
+        ).all()
+        for child in children:
+            db.query(InspoItem).filter(
+                InspoItem.user_id == user_id, InspoItem.style_board_id == child.id
+            ).update({"style_board_id": None})
+            db.delete(child)
+    # Unassign any inspo items directly assigned to this board
+    db.query(InspoItem).filter(
+        InspoItem.user_id == user_id, InspoItem.style_board_id == board_id
+    ).update({"style_board_id": None})
+    db.delete(board)
+    db.commit()
     return {"ok": True}
 
 
@@ -798,8 +817,11 @@ def suggest_outfit(body: OutfitSuggestBody, user_id: int = Depends(get_current_u
     board_rules   = board.rules if board else None
     board_inspo_ctx = ""
     if board:
+        # Collect inspo from all sub-vibe boards of this event board
+        child_ids = [b.id for b in style_boards if b.parent_id == board.id]
         board_items = db.query(InspoItem).filter(
-            InspoItem.user_id == user_id, InspoItem.style_board_id == board.id
+            InspoItem.user_id == user_id,
+            InspoItem.style_board_id.in_(child_ids) if child_ids else InspoItem.style_board_id == board.id
         ).all()
         board_inspo_ctx = "; ".join(i.style_notes for i in board_items if i.style_notes)[:500]
 
@@ -1232,7 +1254,7 @@ def import_inspo_from_url(
 
 @app.post("/api/inspo/auto-categorize")
 def inspo_auto_categorize(user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
-    """Use Claude to group all inspo photos into named style vibes."""
+    """Use Claude to group inspo photos into events → aesthetic sub-vibes."""
     items = db.query(InspoItem).filter(InspoItem.user_id == user_id).all()
     if len(items) < 2:
         raise HTTPException(status_code=400, detail="Upload at least 2 inspo photos first.")
@@ -1242,14 +1264,15 @@ def inspo_auto_categorize(user_id: int = Depends(get_current_user_id), db: Sessi
         raise HTTPException(status_code=400, detail="Photos haven't finished analyzing yet — wait a moment and try again.")
 
     try:
-        categories = auto_categorize_inspo(inspo_data)
+        result = auto_categorize_inspo(inspo_data)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"AI categorization failed: {exc}")
 
-    if not categories:
+    events = result.get("events", [])
+    if not events:
         raise HTTPException(status_code=500, detail="Could not generate categories — try again.")
 
-    # Wipe existing vibes (unassign items, delete boards)
+    # Wipe existing boards (unassign items first, then delete all boards)
     existing = db.query(StyleBoard).filter(StyleBoard.user_id == user_id).all()
     for board in existing:
         db.query(InspoItem).filter(
@@ -1258,26 +1281,43 @@ def inspo_auto_categorize(user_id: int = Depends(get_current_user_id), db: Sessi
         db.delete(board)
     db.commit()
 
-    # Create new vibes and assign photos
-    created = []
-    for cat in categories:
-        label = (cat.get("label") or "").strip()
-        ids   = cat.get("ids", [])
-        if not label:
+    # Create event boards (parent) + sub-vibe boards (children) and assign photos
+    all_boards = []
+    for event in events:
+        event_label = (event.get("event") or "").strip()
+        vibes       = event.get("vibes", [])
+        if not event_label:
             continue
-        board = StyleBoard(user_id=user_id, label=label, rules=None)
-        db.add(board)
+        # Create event (parent) board — no inspo assigned directly
+        event_board = StyleBoard(user_id=user_id, label=event_label, rules=None, parent_id=None)
+        db.add(event_board)
         db.flush()
-        for inspo_id in ids:
-            db.query(InspoItem).filter(
-                InspoItem.id == inspo_id, InspoItem.user_id == user_id
-            ).update({"style_board_id": board.id})
-        created.append({"id": board.id, "label": board.label, "rules": board.rules})
+        all_boards.append({
+            "id": event_board.id, "label": event_board.label,
+            "rules": event_board.rules, "parent_id": None
+        })
+        # Create sub-vibe boards under this event
+        for vibe in vibes:
+            vibe_label = (vibe.get("label") or "").strip()
+            vibe_ids   = vibe.get("ids", [])
+            if not vibe_label:
+                continue
+            vibe_board = StyleBoard(user_id=user_id, label=vibe_label, rules=None, parent_id=event_board.id)
+            db.add(vibe_board)
+            db.flush()
+            for inspo_id in vibe_ids:
+                db.query(InspoItem).filter(
+                    InspoItem.id == inspo_id, InspoItem.user_id == user_id
+                ).update({"style_board_id": vibe_board.id})
+            all_boards.append({
+                "id": vibe_board.id, "label": vibe_board.label,
+                "rules": vibe_board.rules, "parent_id": event_board.id
+            })
     db.commit()
 
-    # Return updated inspo items so frontend can refresh assignments
+    # Return all boards (events + vibes) so frontend can render two-level UI
     updated_items = [serialize_inspo(it) for it in db.query(InspoItem).filter(InspoItem.user_id == user_id).all()]
-    return {"vibes": created, "items": updated_items}
+    return {"vibes": all_boards, "items": updated_items}
 
 
 def _split_occasions(text: str) -> list[str]:
@@ -1345,8 +1385,10 @@ def week_plan(body: WeekPlanBody, user_id: int = Depends(get_current_user_id), d
             b_rules   = board.rules if board else None
             b_inspo   = ""
             if board:
+                child_ids = [b.id for b in style_boards if b.parent_id == board.id]
                 b_items = db.query(InspoItem).filter(
-                    InspoItem.user_id == user_id, InspoItem.style_board_id == board.id
+                    InspoItem.user_id == user_id,
+                    InspoItem.style_board_id.in_(child_ids) if child_ids else InspoItem.style_board_id == board.id
                 ).all()
                 b_inspo = "; ".join(i.style_notes for i in b_items if i.style_notes)[:500]
             try:

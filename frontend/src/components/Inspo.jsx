@@ -4,11 +4,23 @@ import ClothesLoader from './ClothesLoader'
 
 const API = import.meta.env.VITE_API_URL ?? ''
 
-function InspoCard({ item, selected, onToggle, onDelete, boards, onAssignBoard }) {
+function InspoCard({ item, selected, onToggle, onDelete, allBoards, onAssignBoard }) {
   const [hovered, setHovered]           = useState(false)
   const [showBoardPicker, setShowBoardPicker] = useState(false)
+
   const detectedText = item.items_detected?.map(d => d.type).join(' · ')
-  const assignedBoard = boards?.find(b => b.id === item.style_board_id)
+  // Sub-vibe boards only (parent_id != null)
+  const vibeBoards  = allBoards?.filter(b => b.parent_id) ?? []
+  const eventBoards = allBoards?.filter(b => !b.parent_id) ?? []
+
+  const assignedVibe  = vibeBoards.find(b => b.id === item.style_board_id)
+  const assignedEvent = assignedVibe ? eventBoards.find(e => e.id === assignedVibe.parent_id) : null
+
+  // Group vibes by event for picker display
+  const vibesByEvent = eventBoards.map(ev => ({
+    event: ev,
+    vibes: vibeBoards.filter(v => v.parent_id === ev.id),
+  })).filter(g => g.vibes.length > 0)
 
   return (
     <div
@@ -39,42 +51,63 @@ function InspoCard({ item, selected, onToggle, onDelete, boards, onAssignBoard }
 
       <div className="aspect-square relative overflow-hidden" style={{ backgroundColor: '#F0EAE2' }}>
         <img src={`${API}${item.image_url}`} alt="inspo" className="w-full h-full object-cover" />
+
         {hovered && item.items_detected?.length > 0 && !showBoardPicker && (
           <div className="absolute inset-0 flex flex-col justify-end p-3" style={{ backgroundColor: 'rgba(45,26,14,0.6)' }}>
             <p className="text-white text-xs leading-relaxed">{detectedText}</p>
           </div>
         )}
+
         {/* Board picker overlay */}
         {showBoardPicker && (
           <div
-            className="absolute inset-0 z-20 flex flex-col justify-end p-2 gap-1"
-            style={{ backgroundColor: 'rgba(250,247,242,0.96)' }}
+            className="absolute inset-0 z-20 flex flex-col justify-start p-2 gap-0.5 overflow-y-auto"
+            style={{ backgroundColor: 'rgba(250,247,242,0.97)' }}
             onClick={e => e.stopPropagation()}
           >
-            <p className="text-[10px] uppercase tracking-widest mb-1" style={{ color: '#9B8E84' }}>assign to board</p>
+            <p className="text-[10px] uppercase tracking-widest mb-1" style={{ color: '#9B8E84' }}>assign vibe</p>
             <button
               onClick={() => { onAssignBoard(item.id, null); setShowBoardPicker(false) }}
-              className="text-[10px] rounded-full px-2 py-0.5 border text-left"
+              className="text-[10px] rounded-full px-2 py-0.5 border text-left mb-1"
               style={{
                 borderColor: !item.style_board_id ? '#8B1A1A' : '#E3D9CE',
                 backgroundColor: !item.style_board_id ? '#F0DADA' : 'transparent',
                 color: !item.style_board_id ? '#6B1010' : '#9B8E84',
               }}
             >none</button>
-            {boards?.map(b => (
+            {vibesByEvent.map(({ event, vibes }) => (
+              <div key={event.id}>
+                <p className="text-[9px] uppercase tracking-wider mt-1 mb-0.5" style={{ color: '#C4B5AC' }}>{event.label}</p>
+                {vibes.map(v => (
+                  <button
+                    key={v.id}
+                    onClick={() => { onAssignBoard(item.id, v.id); setShowBoardPicker(false) }}
+                    className="text-[10px] rounded-full px-2 py-0.5 border text-left block mb-0.5"
+                    style={{
+                      borderColor: item.style_board_id === v.id ? '#8B1A1A' : '#E3D9CE',
+                      backgroundColor: item.style_board_id === v.id ? '#F0DADA' : 'transparent',
+                      color: item.style_board_id === v.id ? '#6B1010' : '#9B8E84',
+                    }}
+                  >{v.label}</button>
+                ))}
+              </div>
+            ))}
+            {/* Ungrouped vibes (no parent event match) */}
+            {vibeBoards.filter(v => !eventBoards.find(e => e.id === v.parent_id)).map(v => (
               <button
-                key={b.id}
-                onClick={() => { onAssignBoard(item.id, b.id); setShowBoardPicker(false) }}
-                className="text-[10px] rounded-full px-2 py-0.5 border text-left"
+                key={v.id}
+                onClick={() => { onAssignBoard(item.id, v.id); setShowBoardPicker(false) }}
+                className="text-[10px] rounded-full px-2 py-0.5 border text-left block mb-0.5"
                 style={{
-                  borderColor: item.style_board_id === b.id ? '#8B1A1A' : '#E3D9CE',
-                  backgroundColor: item.style_board_id === b.id ? '#F0DADA' : 'transparent',
-                  color: item.style_board_id === b.id ? '#6B1010' : '#9B8E84',
+                  borderColor: item.style_board_id === v.id ? '#8B1A1A' : '#E3D9CE',
+                  backgroundColor: item.style_board_id === v.id ? '#F0DADA' : 'transparent',
+                  color: item.style_board_id === v.id ? '#6B1010' : '#9B8E84',
                 }}
-              >{b.label}</button>
+              >{v.label}</button>
             ))}
           </div>
         )}
+
         {hovered && !showBoardPicker && (
           <>
             <button
@@ -86,20 +119,23 @@ function InspoCard({ item, selected, onToggle, onDelete, boards, onAssignBoard }
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
-            {boards?.length > 0 && (
+            {(vibeBoards.length > 0 || vibesByEvent.length > 0) && (
               <button
                 onClick={e => { e.stopPropagation(); setShowBoardPicker(true) }}
                 className="absolute bottom-2 right-2 rounded-full px-2 py-0.5 text-[10px] flex items-center gap-0.5"
                 style={{ backgroundColor: 'rgba(250,247,242,0.9)', color: '#9B8E84' }}
-              >🏷 board</button>
+              >🏷 vibe</button>
             )}
           </>
         )}
       </div>
-      {(item.style_notes || assignedBoard) && (
+
+      {(item.style_notes || assignedVibe) && (
         <div className="px-3 py-2 space-y-1">
-          {assignedBoard && (
-            <p className="text-[10px] font-medium" style={{ color: '#8B1A1A' }}>🏷 {assignedBoard.label}</p>
+          {assignedVibe && (
+            <p className="text-[10px] font-medium" style={{ color: '#8B1A1A' }}>
+              {assignedEvent ? `${assignedEvent.label} · ` : ''}{assignedVibe.label}
+            </p>
           )}
           {item.style_notes && (
             <p className="text-xs italic line-clamp-2" style={{ color: '#9B8E84' }}>{item.style_notes}</p>
@@ -161,11 +197,11 @@ export default function Inspo() {
   const fileInputRef = useRef(null)
 
   // Pinterest import state
-  const [pinterestUrl, setPinterestUrl]   = useState('')
-  const [boardList, setBoardList]         = useState([])
-  const [importing, setImporting]         = useState(false)
+  const [pinterestUrl, setPinterestUrl]     = useState('')
+  const [boardList, setBoardList]           = useState([])
+  const [importing, setImporting]           = useState(false)
   const [importProgress, setImportProgress] = useState(null)
-  const [importMsg, setImportMsg]         = useState(null)
+  const [importMsg, setImportMsg]           = useState(null)
 
   // Direct image URL import fallback
   const [imageUrlInput, setImageUrlInput] = useState('')
@@ -174,24 +210,32 @@ export default function Inspo() {
   // Selection state
   const [selectedIds, setSelectedIds] = useState(new Set())
 
-  // Get-a-look panel state
+  // Get-a-look panel
   const [showLookPanel, setShowLookPanel] = useState(false)
-  const [city, setCity] = useState('')
-  const [coords, setCoords] = useState(null)
-  const [locating, setLocating] = useState(false)
+  const [city, setCity]       = useState('')
+  const [coords, setCoords]   = useState(null)
+  const [locating, setLocating]     = useState(false)
   const [lookLoading, setLookLoading] = useState(false)
-  const [lookResult, setLookResult] = useState(null)
-  const [lookError, setLookError] = useState('')
-  const [lookSaved, setLookSaved] = useState(false)
+  const [lookResult, setLookResult]   = useState(null)
+  const [lookError, setLookError]     = useState('')
+  const [lookSaved, setLookSaved]     = useState(false)
 
-  // Vibes (auto-categorized inspo groups)
+  // Boards — flat list from API; we derive event/vibe split from parent_id
   const [styleBoards, setStyleBoards]         = useState([])
-  const [activeBoard, setActiveBoard]         = useState(null)
+  const [activeEvent, setActiveEvent]         = useState(null)  // event board id | null
+  const [activeVibe, setActiveVibe]           = useState(null)  // sub-vibe board id | null
   const [categorizing, setCategorizing]       = useState(false)
   const [categorizeError, setCategorizeError] = useState('')
-  const [editingBoard, setEditingBoard]       = useState(null)  // id being renamed
+  const [editingBoard, setEditingBoard]       = useState(null)
   const [editingLabel, setEditingLabel]       = useState('')
-  const [boardRulesInput, setBoardRulesInput] = useState('')
+  const [eventRulesInput, setEventRulesInput] = useState('')
+  const [uploadStatus, setUploadStatus]       = useState('')
+
+  // Derived
+  const eventBoards        = styleBoards.filter(b => !b.parent_id)
+  const vibeBoards         = styleBoards.filter(b => b.parent_id)
+  const activeEventVibes   = vibeBoards.filter(b => b.parent_id === activeEvent)
+  const activeEventVibeIds = new Set(activeEventVibes.map(b => b.id))
 
   const fetchInspo = async () => {
     setLoadingInspo(true)
@@ -212,15 +256,13 @@ export default function Inspo() {
 
   useEffect(() => { fetchInspo(); fetchRecs(); fetchBoards() }, [])
 
-  // Sync rules editor when active board changes
+  // Sync rules editor when active event changes
   useEffect(() => {
-    if (activeBoard) {
-      const board = styleBoards.find(b => b.id === activeBoard)
-      setBoardRulesInput(board?.rules || '')
+    if (activeEvent) {
+      const ev = eventBoards.find(b => b.id === activeEvent)
+      setEventRulesInput(ev?.rules || '')
     }
-  }, [activeBoard, styleBoards])
-
-  const [uploadStatus, setUploadStatus] = useState('')
+  }, [activeEvent, styleBoards])
 
   const handleUpload = async (files) => {
     const list = files instanceof FileList ? Array.from(files) : [files]
@@ -233,9 +275,7 @@ export default function Inspo() {
         fd.append('image', list[i])
         const res = await axios.post(`${API}/api/inspo/upload`, fd)
         setInspoItems(p => [res.data, ...p])
-      } catch {
-        // continue
-      }
+      } catch { /* continue */ }
     }
     fetchRecs()
     setUploading(false)
@@ -257,8 +297,8 @@ export default function Inspo() {
     setImportMsg(null)
     setImportProgress({ current: 0, total: toImport.length, count: 0 })
     let totalImported = 0
-    let totalSkipped = 0
-    let lastError = null
+    let totalSkipped  = 0
+    let lastError     = null
     for (let i = 0; i < toImport.length; i++) {
       setImportProgress({ current: i + 1, total: toImport.length, count: totalImported })
       try {
@@ -371,7 +411,8 @@ export default function Inspo() {
       const res = await axios.post(`${API}/api/inspo/auto-categorize`)
       setStyleBoards(res.data.vibes)
       setInspoItems(res.data.items)
-      setActiveBoard(null)
+      setActiveEvent(null)
+      setActiveVibe(null)
     } catch (err) {
       setCategorizeError(err.response?.data?.detail || 'Could not organize — try again')
     } finally {
@@ -392,15 +433,24 @@ export default function Inspo() {
 
   const handleDeleteBoard = async (boardId) => {
     await axios.delete(`${API}/api/style-boards/${boardId}`)
-    setStyleBoards(p => p.filter(b => b.id !== boardId))
-    if (activeBoard === boardId) setActiveBoard(null)
+    setStyleBoards(p => p.filter(b => b.id !== boardId && b.parent_id !== boardId))
+    setInspoItems(p => p.map(i => {
+      // If the deleted board was an event, clear inspo items assigned to its child vibes
+      const deletedVibeIds = vibeBoards.filter(v => v.parent_id === boardId).map(v => v.id)
+      if (deletedVibeIds.includes(i.style_board_id) || i.style_board_id === boardId) {
+        return { ...i, style_board_id: null }
+      }
+      return i
+    }))
+    if (activeEvent === boardId) { setActiveEvent(null); setActiveVibe(null) }
+    if (activeVibe === boardId) setActiveVibe(null)
   }
 
-  const handleSaveBoardRules = async () => {
-    if (!activeBoard) return
+  const handleSaveEventRules = async () => {
+    if (!activeEvent) return
     try {
-      const res = await axios.patch(`${API}/api/style-boards/${activeBoard}`, { rules: boardRulesInput })
-      setStyleBoards(p => p.map(b => b.id === activeBoard ? { ...b, rules: res.data.rules } : b))
+      const res = await axios.patch(`${API}/api/style-boards/${activeEvent}`, { rules: eventRulesInput })
+      setStyleBoards(p => p.map(b => b.id === activeEvent ? { ...b, rules: res.data.rules } : b))
     } catch { /* silent */ }
   }
 
@@ -409,7 +459,83 @@ export default function Inspo() {
     setInspoItems(p => p.map(item => item.id === inspoId ? { ...item, style_board_id: boardId } : item))
   }
 
+  const selectEvent = (evId) => {
+    if (evId === activeEvent) { setActiveEvent(null); setActiveVibe(null) }
+    else { setActiveEvent(evId); setActiveVibe(null) }
+  }
+
+  const selectVibe = (vId) => {
+    setActiveVibe(vId === activeVibe ? null : vId)
+  }
+
   const clearSelection = () => { setSelectedIds(new Set()); setShowLookPanel(false); setLookResult(null) }
+
+  // Filtered photo grid
+  const filteredItems = activeVibe
+    ? inspoItems.filter(i => i.style_board_id === activeVibe)
+    : activeEvent
+    ? inspoItems.filter(i => activeEventVibeIds.has(i.style_board_id))
+    : inspoItems
+
+  const activeEventLabel = eventBoards.find(b => b.id === activeEvent)?.label
+  const activeVibeLabel  = vibeBoards.find(b => b.id === activeVibe)?.label
+  const gridTitle = activeVibeLabel
+    ? `${activeEventLabel} · ${activeVibeLabel}`
+    : activeEventLabel
+    ? activeEventLabel
+    : 'saved'
+
+  // Board chip component (shared for event and vibe chips)
+  const BoardChip = ({ board, isActive, onClick }) => (
+    <div className="group relative flex items-center">
+      {editingBoard === board.id ? (
+        <input
+          autoFocus
+          value={editingLabel}
+          onChange={e => setEditingLabel(e.target.value)}
+          onBlur={() => handleRenameBoard(board.id)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') handleRenameBoard(board.id)
+            if (e.key === 'Escape') { setEditingBoard(null); setEditingLabel('') }
+          }}
+          className="text-xs rounded-full px-3 py-1.5 border bg-transparent focus:outline-none"
+          style={{ borderColor: '#8B1A1A', color: '#2D1A0E', minWidth: '5rem' }}
+        />
+      ) : (
+        <button
+          onClick={onClick}
+          onDoubleClick={() => { setEditingBoard(board.id); setEditingLabel(board.label) }}
+          title="double-click to rename"
+          className="text-xs rounded-full px-3 py-1.5 border transition-all"
+          style={{
+            borderColor: isActive ? '#8B1A1A' : '#E3D9CE',
+            backgroundColor: isActive ? '#F0DADA' : 'transparent',
+            color: isActive ? '#6B1010' : '#9B8E84',
+            paddingRight: '1.5rem',
+          }}
+        >
+          {board.label}
+          {!board.parent_id && (
+            <span className="ml-1 opacity-40 text-[9px]">
+              {inspoItems.filter(i => activeEventVibeIds.has(i.style_board_id) || vibeBoards.filter(v => v.parent_id === board.id).some(v => v.id === i.style_board_id)).length || ''}
+            </span>
+          )}
+          {board.parent_id && (
+            <span className="ml-1 opacity-40 text-[9px]">
+              {inspoItems.filter(i => i.style_board_id === board.id).length || ''}
+            </span>
+          )}
+        </button>
+      )}
+      {editingBoard !== board.id && (
+        <button
+          onClick={() => handleDeleteBoard(board.id)}
+          className="absolute right-1 opacity-0 group-hover:opacity-100 text-xs leading-none transition-opacity"
+          style={{ color: '#C4B5AC' }}
+        >×</button>
+      )}
+    </div>
+  )
 
   return (
     <div className="space-y-10">
@@ -421,25 +547,23 @@ export default function Inspo() {
         </p>
       </div>
 
-      {/* Vibes — auto-categorized inspo groups */}
+      {/* ── Events & Vibes filter ── */}
       {inspoItems.length >= 2 && (
         <div className="space-y-3">
           {styleBoards.length === 0 ? (
-            /* First time — show organize CTA */
+            /* First time: organize CTA */
             <div className="rounded-2xl border p-5 flex items-center justify-between gap-4" style={{ backgroundColor: '#fff', borderColor: '#E3D9CE' }}>
               <div>
                 <p className="text-sm font-medium" style={{ color: '#2D1A0E' }}>categorize my pins</p>
                 <p className="text-xs mt-0.5" style={{ color: '#9B8E84' }}>
-                  let the ai read your inspo and group it into vibes automatically
+                  let the ai sort your inspo into events (work, date night…) and vibes (quiet luxury, romantic…)
                 </p>
-                {categorizeError && (
-                  <p className="text-xs mt-1" style={{ color: '#8B1A1A' }}>{categorizeError}</p>
-                )}
+                {categorizeError && <p className="text-xs mt-1" style={{ color: '#8B1A1A' }}>{categorizeError}</p>}
               </div>
               <button
                 onClick={handleAutoCategorize}
                 disabled={categorizing}
-                className="shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-all disabled:opacity-50 flex items-center gap-2"
+                className="shrink-0 rounded-full px-4 py-2 text-sm font-medium disabled:opacity-50 flex items-center gap-2"
                 style={{ backgroundColor: '#2D1A0E', color: '#FAF7F2' }}
               >
                 {categorizing && <span className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin" />}
@@ -447,10 +571,10 @@ export default function Inspo() {
               </button>
             </div>
           ) : (
-            /* Vibes exist — show chips + re-organize option */
             <>
+              {/* Row: "events" label + re-organize */}
               <div className="flex items-center justify-between">
-                <p className="text-xs uppercase tracking-widest" style={{ color: '#9B8E84' }}>your vibes</p>
+                <p className="text-xs uppercase tracking-widest" style={{ color: '#9B8E84' }}>events</p>
                 <button
                   onClick={handleAutoCategorize}
                   disabled={categorizing}
@@ -462,36 +586,32 @@ export default function Inspo() {
                 </button>
               </div>
 
-              {categorizeError && (
-                <p className="text-xs" style={{ color: '#8B1A1A' }}>{categorizeError}</p>
-              )}
+              {categorizeError && <p className="text-xs" style={{ color: '#8B1A1A' }}>{categorizeError}</p>}
 
+              {/* Event chips */}
               <div className="flex flex-wrap gap-2 items-center">
-                {/* All chip */}
                 <button
-                  onClick={() => setActiveBoard(null)}
+                  onClick={() => { setActiveEvent(null); setActiveVibe(null) }}
                   className="text-xs rounded-full px-3 py-1.5 border transition-all"
                   style={{
-                    borderColor: !activeBoard ? '#8B1A1A' : '#E3D9CE',
-                    backgroundColor: !activeBoard ? '#F0DADA' : 'transparent',
-                    color: !activeBoard ? '#6B1010' : '#9B8E84',
+                    borderColor: !activeEvent ? '#8B1A1A' : '#E3D9CE',
+                    backgroundColor: !activeEvent ? '#F0DADA' : 'transparent',
+                    color: !activeEvent ? '#6B1010' : '#9B8E84',
                   }}
                 >all</button>
-
-                {/* Vibe chips */}
-                {styleBoards.map(board => {
-                  const count   = inspoItems.filter(i => i.style_board_id === board.id).length
-                  const isActive = activeBoard === board.id
+                {eventBoards.map(ev => {
+                  const evVibeIds = new Set(vibeBoards.filter(v => v.parent_id === ev.id).map(v => v.id))
+                  const count = inspoItems.filter(i => evVibeIds.has(i.style_board_id)).length
                   return (
-                    <div key={board.id} className="group relative flex items-center">
-                      {editingBoard === board.id ? (
+                    <div key={ev.id} className="group relative flex items-center">
+                      {editingBoard === ev.id ? (
                         <input
                           autoFocus
                           value={editingLabel}
                           onChange={e => setEditingLabel(e.target.value)}
-                          onBlur={() => handleRenameBoard(board.id)}
+                          onBlur={() => handleRenameBoard(ev.id)}
                           onKeyDown={e => {
-                            if (e.key === 'Enter') handleRenameBoard(board.id)
+                            if (e.key === 'Enter') handleRenameBoard(ev.id)
                             if (e.key === 'Escape') { setEditingBoard(null); setEditingLabel('') }
                           }}
                           className="text-xs rounded-full px-3 py-1.5 border bg-transparent focus:outline-none"
@@ -499,24 +619,24 @@ export default function Inspo() {
                         />
                       ) : (
                         <button
-                          onClick={() => setActiveBoard(board.id === activeBoard ? null : board.id)}
-                          onDoubleClick={() => { setEditingBoard(board.id); setEditingLabel(board.label) }}
+                          onClick={() => selectEvent(ev.id)}
+                          onDoubleClick={() => { setEditingBoard(ev.id); setEditingLabel(ev.label) }}
                           title="double-click to rename"
                           className="text-xs rounded-full px-3 py-1.5 border transition-all"
                           style={{
-                            borderColor: isActive ? '#8B1A1A' : '#E3D9CE',
-                            backgroundColor: isActive ? '#F0DADA' : 'transparent',
-                            color: isActive ? '#6B1010' : '#9B8E84',
+                            borderColor: activeEvent === ev.id ? '#8B1A1A' : '#E3D9CE',
+                            backgroundColor: activeEvent === ev.id ? '#F0DADA' : 'transparent',
+                            color: activeEvent === ev.id ? '#6B1010' : '#9B8E84',
                             paddingRight: '1.5rem',
                           }}
                         >
-                          {board.label}
+                          {ev.label}
                           {count > 0 && <span className="ml-1 opacity-40 text-[9px]">{count}</span>}
                         </button>
                       )}
-                      {editingBoard !== board.id && (
+                      {editingBoard !== ev.id && (
                         <button
-                          onClick={() => handleDeleteBoard(board.id)}
+                          onClick={() => handleDeleteBoard(ev.id)}
                           className="absolute right-1 opacity-0 group-hover:opacity-100 text-xs leading-none transition-opacity"
                           style={{ color: '#C4B5AC' }}
                         >×</button>
@@ -526,24 +646,75 @@ export default function Inspo() {
                 })}
               </div>
 
-              {/* Rules editor for active vibe (for outfit AI context) */}
-              {activeBoard && (
+              {/* Sub-vibe chips (only when an event is selected) */}
+              {activeEvent && activeEventVibes.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pl-1 items-center">
+                  <span className="text-[10px] uppercase tracking-wider mr-1" style={{ color: '#C4B5AC' }}>vibes</span>
+                  {activeEventVibes.map(vibe => {
+                    const count = inspoItems.filter(i => i.style_board_id === vibe.id).length
+                    return (
+                      <div key={vibe.id} className="group relative flex items-center">
+                        {editingBoard === vibe.id ? (
+                          <input
+                            autoFocus
+                            value={editingLabel}
+                            onChange={e => setEditingLabel(e.target.value)}
+                            onBlur={() => handleRenameBoard(vibe.id)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') handleRenameBoard(vibe.id)
+                              if (e.key === 'Escape') { setEditingBoard(null); setEditingLabel('') }
+                            }}
+                            className="text-[11px] rounded-full px-2.5 py-1 border bg-transparent focus:outline-none"
+                            style={{ borderColor: '#8B1A1A', color: '#2D1A0E', minWidth: '4rem' }}
+                          />
+                        ) : (
+                          <button
+                            onClick={() => selectVibe(vibe.id)}
+                            onDoubleClick={() => { setEditingBoard(vibe.id); setEditingLabel(vibe.label) }}
+                            title="double-click to rename"
+                            className="text-[11px] rounded-full px-2.5 py-1 border transition-all"
+                            style={{
+                              borderColor: activeVibe === vibe.id ? '#8B1A1A' : '#D4C5C5',
+                              backgroundColor: activeVibe === vibe.id ? '#F0DADA' : 'transparent',
+                              color: activeVibe === vibe.id ? '#6B1010' : '#9B8E84',
+                              paddingRight: '1.25rem',
+                            }}
+                          >
+                            {vibe.label}
+                            {count > 0 && <span className="ml-1 opacity-40 text-[9px]">{count}</span>}
+                          </button>
+                        )}
+                        {editingBoard !== vibe.id && (
+                          <button
+                            onClick={() => handleDeleteBoard(vibe.id)}
+                            className="absolute right-0.5 opacity-0 group-hover:opacity-100 text-xs leading-none transition-opacity"
+                            style={{ color: '#C4B5AC' }}
+                          >×</button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* Rules editor for active event */}
+              {activeEvent && (
                 <div className="rounded-xl border p-3.5 space-y-2" style={{ borderColor: '#E3D9CE', backgroundColor: '#fff' }}>
                   <p className="text-[11px] uppercase tracking-widest" style={{ color: '#9B8E84' }}>
-                    outfit rules for {styleBoards.find(b => b.id === activeBoard)?.label}
+                    outfit rules for {activeEventLabel}
                     <span className="normal-case ml-1 tracking-normal" style={{ color: '#C4B5AC' }}>· optional</span>
                   </p>
                   <textarea
-                    value={boardRulesInput}
-                    onChange={e => setBoardRulesInput(e.target.value)}
-                    onBlur={handleSaveBoardRules}
+                    value={eventRulesInput}
+                    onChange={e => setEventRulesInput(e.target.value)}
+                    onBlur={handleSaveEventRules}
                     placeholder="e.g. formal only, no short skirts, blazers preferred… leave blank to let the ai decide"
                     rows={2}
                     className="w-full text-sm bg-transparent focus:outline-none resize-none"
                     style={{ color: '#4A3020' }}
                   />
                   <p className="text-[10px]" style={{ color: '#C4B5AC' }}>
-                    auto-saved · the ai applies these when you plan a "{styleBoards.find(b => b.id === activeBoard)?.label}" day in the week planner
+                    auto-saved · the ai applies these when you plan a "{activeEventLabel}" day in the week planner
                   </p>
                 </div>
               )}
@@ -552,142 +723,55 @@ export default function Inspo() {
         </div>
       )}
 
-      {/* Pinterest board import */}
-      <div className="rounded-2xl border p-5 space-y-3" style={{ backgroundColor: '#fff', borderColor: '#E3D9CE' }}>
-        <div className="flex items-center gap-2">
-          {/* Pinterest P logo */}
-          <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="#E60023">
-            <path d="M12 0C5.373 0 0 5.373 0 12c0 5.084 3.163 9.426 7.627 11.174-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 0 1 .083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0z"/>
-          </svg>
-          <p className="text-sm font-medium" style={{ color: '#2D1A0E' }}>link a Pinterest board</p>
-        </div>
-        <p className="text-xs" style={{ color: '#9B8E84' }}>paste public board URLs — we'll pull the pins and analyze your style</p>
-
-        {/* URL input row */}
-        <div className="flex gap-2">
-          <input
-            type="url"
-            value={pinterestUrl}
-            onChange={e => { setPinterestUrl(e.target.value); setImportMsg(null) }}
-            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); boardList.length >= 0 ? addBoard() : handlePinterestImport() } }}
-            placeholder="https://www.pinterest.com/you/your-board/"
-            className="flex-1 border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#8B1A1A]"
-            style={{ borderColor: '#E3D9CE', color: '#2D1A0E', backgroundColor: '#FAF7F2' }}
-            disabled={importing}
-          />
-          <button
-            onClick={addBoard}
-            disabled={importing || !pinterestUrl.trim()}
-            className="shrink-0 rounded-xl px-3 py-2 text-sm border transition-all disabled:opacity-40"
-            style={{ borderColor: '#E3D9CE', color: '#9B8E84' }}
-          >
-            + add
-          </button>
-        </div>
-
-        {/* Board list */}
-        {boardList.length > 0 && (
-          <div className="space-y-1.5">
-            {boardList.map((url, i) => (
-              <div key={i} className="flex items-center gap-2 rounded-lg px-3 py-2 border" style={{ borderColor: '#E3D9CE', backgroundColor: '#FAF7F2' }}>
-                <span className="text-xs flex-1 truncate" style={{ color: '#4A3020' }}>{url}</span>
-                <button
-                  onClick={() => setBoardList(p => p.filter((_, j) => j !== i))}
-                  className="shrink-0 text-xs"
-                  style={{ color: '#C4B5AC' }}
-                >×</button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Import button */}
-        <button
-          onClick={handlePinterestImport}
-          disabled={importing || (boardList.length === 0 && !pinterestUrl.trim())}
-          className="w-full rounded-xl py-2.5 text-sm font-medium transition-all disabled:opacity-40 flex items-center justify-center gap-2"
-          style={{ backgroundColor: '#E60023', color: '#fff' }}
-        >
-          {importing && <span className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin inline-block" />}
-          {importing
-            ? importProgress
-              ? `board ${importProgress.current} of ${importProgress.total} — ${importProgress.count} pins so far…`
-              : 'importing…'
-            : boardList.length > 1
-              ? `import ${boardList.length} boards`
-              : 'import board'
-          }
-        </button>
-
-        {importMsg && (
-          <p className="text-xs" style={{ color: importMsg.ok ? '#7A9E7A' : '#8B1A1A' }}>
-            {importMsg.text}
-          </p>
-        )}
-
-        {/* Fallback: paste a single image URL */}
-        <details className="group">
-          <summary className="text-xs cursor-pointer list-none flex items-center gap-1" style={{ color: '#C4B5AC' }}>
-            <svg className="w-3 h-3 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-            </svg>
-            board not working? paste a direct image URL instead
-          </summary>
-          <div className="mt-2.5 space-y-2">
-            <p className="text-[11px]" style={{ color: '#9B8E84' }}>
-              on Pinterest: right-click any pin → "Copy image address" → paste below
-            </p>
-            <div className="flex gap-2">
-              <input
-                type="url"
-                value={imageUrlInput}
-                onChange={e => { setImageUrlInput(e.target.value); setImportMsg(null) }}
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleImportFromUrl() } }}
-                placeholder="https://i.pinimg.com/736x/..."
-                className="flex-1 border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#8B1A1A]"
-                style={{ borderColor: '#E3D9CE', color: '#2D1A0E', backgroundColor: '#FAF7F2' }}
-                disabled={importingUrl}
-              />
-              <button
-                onClick={handleImportFromUrl}
-                disabled={importingUrl || !imageUrlInput.trim()}
-                className="shrink-0 rounded-xl px-3 py-2 text-xs font-medium transition-all disabled:opacity-40 flex items-center gap-1"
-                style={{ backgroundColor: '#2D1A0E', color: '#FAF7F2' }}
-              >
-                {importingUrl && <span className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin inline-block" />}
-                {importingUrl ? '…' : 'add'}
-              </button>
+      {/* ── Photo grid ── */}
+      <div className="space-y-4">
+        {inspoItems.length > 0 && (
+          <>
+            <div className="flex items-center justify-between">
+              <h3 className="serif text-lg capitalize" style={{ color: '#2D1A0E' }}>{gridTitle}</h3>
+              <span className="text-xs" style={{ color: '#9B8E84' }}>
+                {filteredItems.length}{(activeEvent || activeVibe) ? ` / ${inspoItems.length}` : ''} images
+              </span>
             </div>
-          </div>
-        </details>
-      </div>
-
-      {/* Upload */}
-      <div
-        className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all duration-200 ${dragOver ? 'border-[#8B1A1A] bg-[#F0DADA]/30' : 'border-[#E3D9CE] hover:border-[#8B1A1A]/40'}`}
-        onClick={() => !uploading && fileInputRef.current?.click()}
-        onDragOver={e => { e.preventDefault(); setDragOver(true) }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={e => { e.preventDefault(); setDragOver(false); handleUpload(e.dataTransfer.files) }}
-      >
-        <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={e => { handleUpload(e.target.files); e.target.value = '' }} />
-        {uploading ? (
-          <div className="flex flex-col items-center gap-3">
-            <ClothesLoader />
-            <p className="text-sm" style={{ color: '#8B1A1A' }}>{uploadStatus}</p>
-          </div>
-        ) : (
-          <div className="space-y-1">
-            <p className="serif-italic text-xl" style={{ color: '#9B8E84' }}>drop inspo here</p>
-            <p className="text-xs tracking-wide" style={{ color: '#C4B5AC' }}>pinterest screenshots, editorials, anything</p>
-          </div>
+            {filteredItems.length === 0 && (activeEvent || activeVibe) && (
+              <div className="text-center py-12 space-y-1">
+                <p className="serif-italic text-lg" style={{ color: '#C4B5AC' }}>no inspo in {activeVibeLabel || activeEventLabel} yet</p>
+                <p className="text-xs" style={{ color: '#C4B5AC' }}>hover any image → "🏷 vibe" to tag it</p>
+              </div>
+            )}
+            {filteredItems.length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                {filteredItems.map(item => (
+                  <InspoCard
+                    key={item.id}
+                    item={item}
+                    selected={selectedIds.has(item.id)}
+                    onToggle={toggleSelect}
+                    onDelete={handleDelete}
+                    allBoards={styleBoards}
+                    onAssignBoard={handleAssignBoard}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
+
+        {loadingInspo ? (
+          <div className="flex justify-center py-20">
+            <ClothesLoader />
+          </div>
+        ) : inspoItems.length === 0 ? (
+          <div className="text-center py-24 space-y-2">
+            <p className="serif-italic text-2xl" style={{ color: '#C4B5AC' }}>nothing saved yet</p>
+            <p className="text-sm" style={{ color: '#C4B5AC' }}>upload screenshots from pinterest, instagram, anywhere</p>
+          </div>
+        ) : null}
       </div>
 
-      {/* Get-a-look panel (shown when items selected) */}
+      {/* ── Get-a-look panel (when items selected) ── */}
       {selectedIds.size > 0 && (
         <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: '#fff', borderColor: '#8B1A1A' }}>
-          {/* Header bar */}
           <div className="flex items-center justify-between px-5 py-3.5" style={{ backgroundColor: '#F0DADA' }}>
             <p className="text-sm font-medium" style={{ color: '#6B1010' }}>
               {selectedIds.size} {selectedIds.size === 1 ? 'vibe' : 'vibes'} selected
@@ -696,19 +780,16 @@ export default function Inspo() {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setShowLookPanel(p => !p)}
-                className="text-xs rounded-full px-4 py-1.5 font-medium transition-all"
+                className="text-xs rounded-full px-4 py-1.5 font-medium"
                 style={{ backgroundColor: '#8B1A1A', color: '#fff' }}
               >
-                {showLookPanel ? 'hide' : 'get today\'s look →'}
+                {showLookPanel ? 'hide' : "get today's look →"}
               </button>
               <button onClick={clearSelection} className="text-xs" style={{ color: '#9B6060' }}>clear</button>
             </div>
           </div>
-
-          {/* Expandable panel */}
           {showLookPanel && (
             <div className="p-5 space-y-4">
-              {/* Location */}
               <div className="space-y-2">
                 <p className="text-xs uppercase tracking-widest" style={{ color: '#9B8E84' }}>your location</p>
                 {coords ? (
@@ -725,7 +806,7 @@ export default function Inspo() {
                       <button
                         onClick={handleGetLocation}
                         disabled={locating}
-                        className="flex items-center gap-1.5 rounded-full px-3 py-1.5 border text-xs transition-all disabled:opacity-60 shrink-0"
+                        className="flex items-center gap-1.5 rounded-full px-3 py-1.5 border text-xs disabled:opacity-60 shrink-0"
                         style={{ borderColor: '#E3D9CE', color: '#9B8E84', backgroundColor: '#fff' }}
                       >
                         {locating ? <span className="w-3 h-3 rounded-full border border-[#E3D9CE] border-t-[#8B1A1A] animate-spin inline-block" /> : '📍'}
@@ -738,30 +819,26 @@ export default function Inspo() {
                       value={city}
                       onChange={e => setCity(e.target.value)}
                       placeholder="type your city…"
-                      className="w-full border-b-2 bg-transparent pb-2 text-sm focus:outline-none transition-all"
+                      className="w-full border-b-2 bg-transparent pb-2 text-sm focus:outline-none"
                       style={{ borderColor: city ? '#8B1A1A' : '#E3D9CE', color: '#2D1A0E' }}
                     />
                   </div>
                 )}
               </div>
-
               <button
                 onClick={handleGetLook}
                 disabled={lookLoading || (!city.trim() && !coords)}
-                className="flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-medium transition-all disabled:opacity-40"
+                className="flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-medium disabled:opacity-40"
                 style={{ backgroundColor: '#2D1A0E', color: '#FAF7F2' }}
               >
                 {lookLoading && <div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />}
                 {lookLoading ? 'styling from your vibes…' : 'style me →'}
               </button>
-
               {lookError && (
                 <p className="text-sm rounded-xl px-4 py-3 border" style={{ color: '#6B1010', backgroundColor: '#F0DADA', borderColor: '#E8CECE' }}>
                   {lookError}
                 </p>
               )}
-
-              {/* Result */}
               {lookResult && !lookLoading && (
                 <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: '#E3D9CE' }}>
                   {lookResult.weather && (
@@ -779,7 +856,7 @@ export default function Inspo() {
                   <button
                     onClick={handleSaveLook}
                     disabled={lookSaved}
-                    className="text-xs rounded-full px-4 py-1.5 border transition-all disabled:opacity-60"
+                    className="text-xs rounded-full px-4 py-1.5 border disabled:opacity-60"
                     style={lookSaved
                       ? { borderColor: '#7A9E7A', color: '#7A9E7A', backgroundColor: '#F0F7F0' }
                       : { borderColor: '#E3D9CE', color: '#9B8E84' }
@@ -794,14 +871,12 @@ export default function Inspo() {
         </div>
       )}
 
-      {/* Capsule recommendations */}
+      {/* ── Capsule recommendations ── */}
       {!loadingRecs && recommendations.length > 0 && (
         <div className="space-y-4">
           <div>
             <h3 className="serif text-lg" style={{ color: '#2D1A0E' }}>your capsule gaps</h3>
-            <p className="text-sm mt-0.5" style={{ color: '#9B8E84' }}>
-              pieces you keep saving but don't own yet
-            </p>
+            <p className="text-sm mt-0.5" style={{ color: '#9B8E84' }}>pieces you keep saving but don't own yet</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {recommendations.map((rec, i) => <RecCard key={i} rec={rec} />)}
@@ -809,58 +884,123 @@ export default function Inspo() {
         </div>
       )}
 
-      {/* Grid */}
-      <div className="space-y-4">
-        {inspoItems.length > 0 && (() => {
-          const filtered = activeBoard
-            ? inspoItems.filter(i => i.style_board_id === activeBoard)
-            : inspoItems
-          const boardName = styleBoards.find(b => b.id === activeBoard)?.label
-          return (
-            <>
-              <div className="flex items-center justify-between">
-                <h3 className="serif text-lg" style={{ color: '#2D1A0E' }}>
-                  {boardName ? `${boardName} inspo` : 'saved'}
-                </h3>
-                <span className="text-xs" style={{ color: '#9B8E84' }}>
-                  {filtered.length}{activeBoard ? ` / ${inspoItems.length}` : ''} images
-                </span>
-              </div>
-              {filtered.length === 0 && (
-                <div className="text-center py-12 space-y-1">
-                  <p className="serif-italic text-lg" style={{ color: '#C4B5AC' }}>no inspo tagged to {boardName} yet</p>
-                  <p className="text-xs" style={{ color: '#C4B5AC' }}>hover any image below → "🏷 board" to tag it</p>
-                </div>
-              )}
-              {filtered.length > 0 && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                  {filtered.map(item => (
-                    <InspoCard
-                      key={item.id}
-                      item={item}
-                      selected={selectedIds.has(item.id)}
-                      onToggle={toggleSelect}
-                      onDelete={handleDelete}
-                      boards={styleBoards}
-                      onAssignBoard={handleAssignBoard}
-                    />
-                  ))}
-                </div>
-              )}
-            </>
-          )
-        })()}
+      {/* ── Add more inspo (Pinterest + Upload) — at the bottom ── */}
+      <div className="space-y-6 pt-4 border-t" style={{ borderColor: '#E3D9CE' }}>
+        <p className="text-xs uppercase tracking-widest" style={{ color: '#C4B5AC' }}>add more inspo</p>
 
-        {loadingInspo ? (
-          <div className="flex justify-center py-20">
-            <ClothesLoader />
+        {/* Pinterest import */}
+        <div className="rounded-2xl border p-5 space-y-3" style={{ backgroundColor: '#fff', borderColor: '#E3D9CE' }}>
+          <div className="flex items-center gap-2">
+            <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="#E60023">
+              <path d="M12 0C5.373 0 0 5.373 0 12c0 5.084 3.163 9.426 7.627 11.174-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 0 1 .083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0z"/>
+            </svg>
+            <p className="text-sm font-medium" style={{ color: '#2D1A0E' }}>link a Pinterest board</p>
           </div>
-        ) : inspoItems.length === 0 ? (
-          <div className="text-center py-24 space-y-2">
-            <p className="serif-italic text-2xl" style={{ color: '#C4B5AC' }}>nothing saved yet</p>
-            <p className="text-sm" style={{ color: '#C4B5AC' }}>upload screenshots from pinterest, instagram, anywhere</p>
+          <p className="text-xs" style={{ color: '#9B8E84' }}>paste public board URLs — we'll pull the pins and analyze your style</p>
+          <div className="flex gap-2">
+            <input
+              type="url"
+              value={pinterestUrl}
+              onChange={e => { setPinterestUrl(e.target.value); setImportMsg(null) }}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addBoard() } }}
+              placeholder="https://www.pinterest.com/you/your-board/"
+              className="flex-1 border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#8B1A1A]"
+              style={{ borderColor: '#E3D9CE', color: '#2D1A0E', backgroundColor: '#FAF7F2' }}
+              disabled={importing}
+            />
+            <button
+              onClick={addBoard}
+              disabled={importing || !pinterestUrl.trim()}
+              className="shrink-0 rounded-xl px-3 py-2 text-sm border disabled:opacity-40"
+              style={{ borderColor: '#E3D9CE', color: '#9B8E84' }}
+            >+ add</button>
           </div>
-        ) : null}
+          {boardList.length > 0 && (
+            <div className="space-y-1.5">
+              {boardList.map((url, i) => (
+                <div key={i} className="flex items-center gap-2 rounded-lg px-3 py-2 border" style={{ borderColor: '#E3D9CE', backgroundColor: '#FAF7F2' }}>
+                  <span className="text-xs flex-1 truncate" style={{ color: '#4A3020' }}>{url}</span>
+                  <button onClick={() => setBoardList(p => p.filter((_, j) => j !== i))} className="shrink-0 text-xs" style={{ color: '#C4B5AC' }}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
+          <button
+            onClick={handlePinterestImport}
+            disabled={importing || (boardList.length === 0 && !pinterestUrl.trim())}
+            className="w-full rounded-xl py-2.5 text-sm font-medium disabled:opacity-40 flex items-center justify-center gap-2"
+            style={{ backgroundColor: '#E60023', color: '#fff' }}
+          >
+            {importing && <span className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin inline-block" />}
+            {importing
+              ? importProgress
+                ? `board ${importProgress.current} of ${importProgress.total} — ${importProgress.count} pins so far…`
+                : 'importing…'
+              : boardList.length > 1
+              ? `import ${boardList.length} boards`
+              : 'import board'
+            }
+          </button>
+          {importMsg && (
+            <p className="text-xs" style={{ color: importMsg.ok ? '#7A9E7A' : '#8B1A1A' }}>{importMsg.text}</p>
+          )}
+          <details className="group">
+            <summary className="text-xs cursor-pointer list-none flex items-center gap-1" style={{ color: '#C4B5AC' }}>
+              <svg className="w-3 h-3 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+              board not working? paste a direct image URL instead
+            </summary>
+            <div className="mt-2.5 space-y-2">
+              <p className="text-[11px]" style={{ color: '#9B8E84' }}>
+                on Pinterest: right-click any pin → "Copy image address" → paste below
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  value={imageUrlInput}
+                  onChange={e => { setImageUrlInput(e.target.value); setImportMsg(null) }}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleImportFromUrl() } }}
+                  placeholder="https://i.pinimg.com/736x/..."
+                  className="flex-1 border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#8B1A1A]"
+                  style={{ borderColor: '#E3D9CE', color: '#2D1A0E', backgroundColor: '#FAF7F2' }}
+                  disabled={importingUrl}
+                />
+                <button
+                  onClick={handleImportFromUrl}
+                  disabled={importingUrl || !imageUrlInput.trim()}
+                  className="shrink-0 rounded-xl px-3 py-2 text-xs font-medium disabled:opacity-40 flex items-center gap-1"
+                  style={{ backgroundColor: '#2D1A0E', color: '#FAF7F2' }}
+                >
+                  {importingUrl && <span className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin inline-block" />}
+                  {importingUrl ? '…' : 'add'}
+                </button>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        {/* Upload zone */}
+        <div
+          className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all duration-200 ${dragOver ? 'border-[#8B1A1A] bg-[#F0DADA]/30' : 'border-[#E3D9CE] hover:border-[#8B1A1A]/40'}`}
+          onClick={() => !uploading && fileInputRef.current?.click()}
+          onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={e => { e.preventDefault(); setDragOver(false); handleUpload(e.dataTransfer.files) }}
+        >
+          <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={e => { handleUpload(e.target.files); e.target.value = '' }} />
+          {uploading ? (
+            <div className="flex flex-col items-center gap-3">
+              <ClothesLoader />
+              <p className="text-sm" style={{ color: '#8B1A1A' }}>{uploadStatus}</p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <p className="serif-italic text-xl" style={{ color: '#9B8E84' }}>drop inspo here</p>
+              <p className="text-xs tracking-wide" style={{ color: '#C4B5AC' }}>pinterest screenshots, editorials, anything</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
