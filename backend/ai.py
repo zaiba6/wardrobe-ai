@@ -257,6 +257,8 @@ def suggest_personalized_outfit(
     bad_combos: list[list[str]] | None = None,
     board_rules: str | None = None,
     board_inspo: str | None = None,
+    style_vibes: list[str] | None = None,
+    disabled_rules: list[str] | None = None,
 ) -> tuple[list[int], str]:
     """Pick one outfit using Claude, informed by the user's inspo aesthetic and mood."""
     if not wardrobe_items:
@@ -278,13 +280,14 @@ def suggest_personalized_outfit(
 
     inspo_line    = f"User's personal style from their inspo board:\n{inspo_context}\n\n" if inspo_context else ""
     occasion_line = f"Occasion: {occasion}.\n" if occasion else ""
+    vibe_line     = f"User's personal aesthetic/style identity: {', '.join(style_vibes)}.\n" if style_vibes else ""
     board_section = ""
     if board_rules:
         board_section += f"PERSONAL STYLE RULES FOR THIS OCCASION (set by the user — follow strictly):\n{board_rules}\n\n"
     if board_inspo:
         board_section += f"PERSONAL INSPO AESTHETIC FOR THIS OCCASION:\n{board_inspo}\n\n"
 
-    rules = get_rules_for_prompt(occasion)
+    rules = get_rules_for_prompt(occasion, disabled_rules)
 
     bad_combos_line = ""
     if bad_combos:
@@ -297,6 +300,7 @@ def suggest_personalized_outfit(
     prompt = (
         "You are a personal stylist who knows this user's taste.\n\n"
         f"{inspo_line}"
+        f"{vibe_line}"
         f"How they're feeling today: {mood}.\n"
         f"{occasion_line}"
         f"Current weather: {temp_c}°C ({temp_f}°F), {condition}.\n\n"
@@ -344,6 +348,8 @@ def suggest_vibe_outfit(
     vibe: str,
     weather: dict,
     mood: str | None = None,
+    style_vibes: list[str] | None = None,
+    disabled_rules: list[str] | None = None,
 ) -> tuple[list[int], str]:
     """Ask Claude to pick specific wardrobe item IDs for a vibe + weather."""
     if not wardrobe_items:
@@ -360,14 +366,16 @@ def suggest_vibe_outfit(
     temp_c = weather["temp_celsius"]
     temp_f = weather["temp_fahrenheit"]
     condition = weather["description"]
-    mood_line = f"Mood: {mood}.\n" if mood else ""
+    mood_line  = f"Mood: {mood}.\n" if mood else ""
+    vibe_line2 = f"User's personal aesthetic: {', '.join(style_vibes)}.\n" if style_vibes else ""
 
-    rules = get_rules_for_prompt(vibe)
+    rules = get_rules_for_prompt(vibe, disabled_rules)
 
     prompt = (
         f'You are a personal stylist. Create an outfit for: "{vibe}".\n'
         f"Weather: {temp_c}°C ({temp_f}°F), {condition}.\n"
-        f"{mood_line}\n"
+        f"{mood_line}"
+        f"{vibe_line2}\n"
         f"{rules}\n\n"
         f"Wardrobe:\n{wardrobe_text}\n\n"
         "Pick a complete, weather-appropriate outfit. Include a top + bottom OR a dress/jumpsuit. "

@@ -7,13 +7,15 @@ import GetDressed from './components/GetDressed'
 import Inspo from './components/Inspo'
 import OutfitsWorn from './components/OutfitsWorn'
 import WeekPlanner from './components/WeekPlanner'
+import Settings from './components/Settings'
 
 const TABS = [
-  { key: 'closet', label: 'the floordrobe' },
-  { key: 'inspo',  label: 'inspo board' },
-  { key: 'today',  label: "today's look" },
-  { key: 'week',   label: 'week planner' },
-  { key: 'worn',   label: 'outfits worn' },
+  { key: 'closet',    label: 'the floordrobe' },
+  { key: 'inspo',     label: 'inspo board' },
+  { key: 'today',     label: "today's look" },
+  { key: 'week',      label: 'week planner' },
+  { key: 'worn',      label: 'outfits worn' },
+  { key: 'settings',  label: 'settings' },
 ]
 
 function AppShell() {
@@ -87,8 +89,9 @@ function AppShell() {
         {activeTab === 'closet' && <Wardrobe />}
         {activeTab === 'today'  && <GetDressed />}
         {activeTab === 'week'   && <WeekPlanner />}
-        {activeTab === 'worn'   && <OutfitsWorn />}
-        {activeTab === 'inspo'  && <Inspo />}
+        {activeTab === 'worn'     && <OutfitsWorn />}
+        {activeTab === 'inspo'    && <Inspo />}
+        {activeTab === 'settings' && <Settings />}
       </main>
     </div>
   )

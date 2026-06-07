@@ -79,6 +79,16 @@ class UserPreset(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class UserSettings(Base):
+    __tablename__ = "user_settings"
+
+    id             = Column(Integer, primary_key=True, index=True)
+    user_id        = Column(Integer, nullable=False, unique=True, index=True)
+    style_vibes    = Column(Text, nullable=True)      # JSON array of aesthetic tags
+    disabled_rules = Column(Text, nullable=True)      # JSON array of disabled rule keys
+    updated_at     = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class OutfitLog(Base):
     __tablename__ = "outfit_logs"
 

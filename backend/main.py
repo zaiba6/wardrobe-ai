@@ -29,7 +29,7 @@ from auth import (
     get_or_create_user, CALENDAR_SCOPES,
 )
 from database import Base, engine, get_db
-from models import ClothingItem, InspoItem, OutfitLog, OutfitFeedback, User, UserPreset, StyleBoard
+from models import ClothingItem, InspoItem, OutfitLog, OutfitFeedback, User, UserPreset, StyleBoard, UserSettings
 from weather import get_weather, get_weather_by_coords
 
 load_dotenv()
@@ -51,6 +51,7 @@ _MIGRATIONS = [
     "ALTER TABLE users ADD COLUMN google_token_expiry DATETIME",
     "CREATE TABLE IF NOT EXISTS style_boards (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, label VARCHAR NOT NULL, rules TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)",
     "ALTER TABLE inspo_items ADD COLUMN style_board_id INTEGER",
+    "CREATE TABLE IF NOT EXISTS user_settings (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL UNIQUE, style_vibes TEXT, disabled_rules TEXT, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)",
 ]
 with engine.connect() as _conn:
     for _stmt in _MIGRATIONS:
@@ -571,6 +572,50 @@ def delete_photo(filename: str, user_id: int = Depends(get_current_user_id), db:
 
 
 # ---------------------------------------------------------------------------
+# User settings helpers
+# ---------------------------------------------------------------------------
+
+def _get_user_settings(user_id: int, db) -> tuple[list[str], list[str]]:
+    """Returns (style_vibes, disabled_rules) for the user."""
+    s = db.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+    if not s:
+        return [], []
+    return json.loads(s.style_vibes or "[]"), json.loads(s.disabled_rules or "[]")
+
+
+class SettingsUpdate(BaseModel):
+    style_vibes:    Optional[list[str]] = None
+    disabled_rules: Optional[list[str]] = None
+
+
+@app.get("/api/settings")
+def get_settings(user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    vibes, disabled = _get_user_settings(user_id, db)
+    return {"style_vibes": vibes, "disabled_rules": disabled}
+
+
+@app.patch("/api/settings")
+def update_settings(body: SettingsUpdate, user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    s = db.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+    if not s:
+        s = UserSettings(user_id=user_id)
+        db.add(s)
+    if body.style_vibes is not None:
+        s.style_vibes = json.dumps(body.style_vibes)
+    if body.disabled_rules is not None:
+        s.disabled_rules = json.dumps(body.disabled_rules)
+    s.updated_at = datetime.utcnow()
+    db.commit()
+    return {"style_vibes": json.loads(s.style_vibes or "[]"), "disabled_rules": json.loads(s.disabled_rules or "[]")}
+
+
+@app.get("/api/settings/rules")
+def get_rule_definitions():
+    from fashion_rules import RULE_DEFINITIONS
+    return RULE_DEFINITIONS
+
+
+# ---------------------------------------------------------------------------
 # Style boards
 # ---------------------------------------------------------------------------
 
@@ -726,6 +771,8 @@ def suggest_outfit(body: OutfitSuggestBody, user_id: int = Depends(get_current_u
         ).all()
         board_inspo_ctx = "; ".join(i.style_notes for i in board_items if i.style_notes)[:500]
 
+    style_vibes, disabled_rules = _get_user_settings(user_id, db)
+
     reason   = "Here's a look for you!"
     selected = []
     try:
@@ -739,6 +786,8 @@ def suggest_outfit(body: OutfitSuggestBody, user_id: int = Depends(get_current_u
             bad_combos=bad_combos,
             board_rules=board_rules,
             board_inspo=board_inspo_ctx,
+            style_vibes=style_vibes,
+            disabled_rules=disabled_rules,
         )
         id_order = {iid: idx for idx, iid in enumerate(item_ids)}
         selected = sorted(
@@ -1170,6 +1219,7 @@ def week_plan(body: WeekPlanBody, user_id: int = Depends(get_current_user_id), d
     bad_combos = [json.loads(r.item_descs) for r in bad_recs if r.item_descs]
 
     style_boards = db.query(StyleBoard).filter(StyleBoard.user_id == user_id).all()
+    style_vibes, disabled_rules = _get_user_settings(user_id, db)
 
     wardrobe_summary = [
         {"id": c.id, "type": c.type, "subtype": c.subtype, "color": c.color,
@@ -1225,6 +1275,8 @@ def week_plan(body: WeekPlanBody, user_id: int = Depends(get_current_user_id), d
                     bad_combos=bad_combos,
                     board_rules=b_rules,
                     board_inspo=b_inspo,
+                    style_vibes=style_vibes,
+                    disabled_rules=disabled_rules,
                 )
                 used_ids.extend(item_ids)
                 id_order = {iid: idx for idx, iid in enumerate(item_ids)}
