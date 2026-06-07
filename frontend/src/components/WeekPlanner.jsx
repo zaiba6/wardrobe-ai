@@ -7,7 +7,7 @@ const API = import.meta.env.VITE_API_URL ?? ''
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 const DAY_SHORT = { Monday: 'Mon', Tuesday: 'Tue', Wednesday: 'Wed', Thursday: 'Thu', Friday: 'Fri', Saturday: 'Sat', Sunday: 'Sun' }
 
-const QUICK_FILL = ['work', 'gym', 'date night', 'going out', 'errands', 'wfh', 'brunch', 'travel']
+const QUICK_FILL = ['work', 'gym', 'date night', 'going out', 'errands', 'wfh', 'brunch', 'travel', 'drinks', 'dinner']
 
 function weatherEmoji(condition = '') {
   const c = condition.toLowerCase()
@@ -48,46 +48,47 @@ function OutfitMini({ items }) {
   )
 }
 
-function DayCard({ day, date, occasion, onOccasionChange, outfitData, generated, expanded, onToggleExpand }) {
-  // outfitData.outfits is an array — one outfit per sub-occasion
-  const outfits = outfitData?.outfits ?? []
+function DayCard({ day, date, tags, onAddTag, onRemoveTag, outfitData, generated, expanded, onToggleExpand }) {
+  const [inputVal, setInputVal] = useState('')
+  const outfits  = outfitData?.outfits ?? []
   const hasOutfit = outfits.length > 0
   const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
+  const submitInput = () => {
+    const val = inputVal.trim()
+    if (!val) return
+    onAddTag(val)
+    setInputVal('')
+  }
+
   return (
     <div
-      className="rounded-2xl border p-4 space-y-2 transition-all"
+      className="rounded-2xl border p-3.5 space-y-2 transition-all"
       style={{
         backgroundColor: hasOutfit ? '#fff' : '#FAF7F2',
         borderColor: hasOutfit ? '#D4C5C5' : '#E3D9CE',
       }}
     >
+      {/* Header */}
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-sm font-medium" style={{ color: '#2D1A0E' }}>
-            {DAY_SHORT[day]}
-            <span className="text-xs font-normal ml-1.5" style={{ color: '#C4B5AC' }}>{dateLabel}</span>
-          </p>
-          {hasOutfit && outfits.length === 1 && (
-            <p className="text-[11px] mt-0.5 truncate" style={{ color: '#9B8E84' }}>{outfits[0].occasion || occasion}</p>
-          )}
-          {hasOutfit && outfits.length > 1 && (
-            <p className="text-[11px] mt-0.5 truncate" style={{ color: '#9B8E84' }}>{outfits.length} looks</p>
-          )}
-        </div>
+        <p className="text-sm font-medium" style={{ color: '#2D1A0E' }}>
+          {DAY_SHORT[day]}
+          <span className="text-xs font-normal ml-1.5" style={{ color: '#C4B5AC' }}>{dateLabel}</span>
+        </p>
         {hasOutfit && (
-          <button onClick={onToggleExpand} className="text-[10px] shrink-0 mt-0.5" style={{ color: '#C4B5AC' }}>
+          <button onClick={onToggleExpand} className="text-[10px] shrink-0" style={{ color: '#C4B5AC' }}>
             {expanded ? 'less' : 'details'}
           </button>
         )}
       </div>
 
-      {hasOutfit ? (
+      {/* After generation */}
+      {generated && hasOutfit && (
         <div className="space-y-3">
           {outfits.map((outfit, i) => (
             <div key={i}>
               {outfits.length > 1 && (
-                <p className="text-[10px] capitalize" style={{ color: '#C4B5AC' }}>{outfit.occasion}</p>
+                <p className="text-[10px] capitalize mb-0.5" style={{ color: '#C4B5AC' }}>{outfit.occasion}</p>
               )}
               <OutfitMini items={outfit.items} />
               {expanded && outfit.reason && (
@@ -96,16 +97,46 @@ function DayCard({ day, date, occasion, onOccasionChange, outfitData, generated,
             </div>
           ))}
         </div>
-      ) : generated ? (
-        <p className="text-xs" style={{ color: '#C4B5AC' }}>no plan for today</p>
-      ) : (
-        <input
-          value={occasion}
-          onChange={e => onOccasionChange(e.target.value)}
-          placeholder="what's going on?"
-          className="w-full text-xs bg-transparent border-b focus:outline-none pb-1"
-          style={{ borderColor: occasion ? '#8B1A1A' : '#E3D9CE', color: '#2D1A0E' }}
-        />
+      )}
+
+      {generated && !hasOutfit && (
+        <p className="text-xs" style={{ color: '#C4B5AC' }}>rest day</p>
+      )}
+
+      {/* Before generation: tag input */}
+      {!generated && (
+        <div className="space-y-2">
+          {/* Selected tags as removable pills */}
+          {tags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {tags.map(tag => (
+                <span
+                  key={tag}
+                  className="flex items-center gap-0.5 text-[10px] rounded-full px-2 py-0.5 border"
+                  style={{ borderColor: '#8B1A1A', backgroundColor: '#F0DADA', color: '#6B1010' }}
+                >
+                  {tag}
+                  <button
+                    onClick={() => onRemoveTag(tag)}
+                    className="ml-0.5 leading-none hover:text-red-700"
+                    style={{ color: '#9B6060' }}
+                  >×</button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Text input */}
+          <input
+            value={inputVal}
+            onChange={e => setInputVal(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submitInput() } }}
+            onBlur={submitInput}
+            placeholder={tags.length === 0 ? "what's going on?" : "+ add another event…"}
+            className="w-full text-xs bg-transparent border-b focus:outline-none pb-1"
+            style={{ borderColor: inputVal ? '#8B1A1A' : '#E3D9CE', color: '#2D1A0E' }}
+          />
+        </div>
       )}
     </div>
   )
@@ -113,16 +144,35 @@ function DayCard({ day, date, occasion, onOccasionChange, outfitData, generated,
 
 export default function WeekPlanner() {
   const weekDates = getWeekDates()
-  const [occasions, setOccasions]     = useState(Object.fromEntries(DAYS.map(d => [d, ''])))
+
+  // dayTags: { Monday: ['work', 'drinks'], Tuesday: [], ... }
+  const [dayTags, setDayTags]         = useState(Object.fromEntries(DAYS.map(d => [d, []])))
   const [city, setCity]               = useState('')
   const [coords, setCoords]           = useState(null)
   const [locating, setLocating]       = useState(false)
   const [generating, setGenerating]   = useState(false)
-  const [weekData, setWeekData]       = useState([])   // array of day objects with outfits[]
+  const [weekData, setWeekData]       = useState([])
   const [weather, setWeather]         = useState(null)
   const [error, setError]             = useState('')
   const [generated, setGenerated]     = useState(false)
   const [expandedDay, setExpandedDay] = useState(null)
+
+  const addTag = (day, tag) => {
+    const clean = tag.trim().toLowerCase()
+    if (!clean) return
+    setDayTags(p => ({
+      ...p,
+      [day]: p[day].includes(clean) ? p[day] : [...p[day], clean],
+    }))
+  }
+
+  const removeTag = (day, tag) => {
+    setDayTags(p => ({ ...p, [day]: p[day].filter(t => t !== tag) }))
+  }
+
+  const toggleChip = (day, chip) => {
+    dayTags[day].includes(chip) ? removeTag(day, chip) : addTag(day, chip)
+  }
 
   const handleGetLocation = () => {
     if (!navigator.geolocation) { setError('Geolocation not supported — type your city.'); return }
@@ -133,14 +183,12 @@ export default function WeekPlanner() {
     )
   }
 
-  const setOccasion = (day, val) => setOccasions(p => ({ ...p, [day]: val }))
-
   const handleGenerate = async () => {
     const days = DAYS.map((day, i) => ({
       date:     weekDates[i],
       day,
-      events:   occasions[day] ? [occasions[day]] : [],
-      occasion: occasions[day] || null,
+      events:   dayTags[day],
+      occasion: dayTags[day].join(' and ') || null,
     }))
     setGenerating(true)
     setError('')
@@ -165,13 +213,11 @@ export default function WeekPlanner() {
     setWeather(null)
     setError('')
     setExpandedDay(null)
-    setOccasions(Object.fromEntries(DAYS.map(d => [d, ''])))
+    setDayTags(Object.fromEntries(DAYS.map(d => [d, []])))
   }
 
-  const hasLocation = coords || city.trim()
-  const anyOccasion = DAYS.some(d => occasions[d])
-
-  // After generation, merge weekData back to days for display
+  const hasLocation  = coords || city.trim()
+  const anyOccasion  = DAYS.some(d => dayTags[d].length > 0)
   const getOutfitData = (day) => weekData.find(w => w.day === day) ?? null
 
   return (
@@ -181,7 +227,7 @@ export default function WeekPlanner() {
         <p className="text-sm mt-1" style={{ color: '#9B8E84' }}>
           {weather
             ? `${weatherEmoji(weather.description)} ${weather.city} · ${Math.round(weather.temp_fahrenheit)}°F this week`
-            : "tell me what you have going on — i'll plan every look"
+            : "add as many events per day as you want — i'll plan a separate fit for each"
           }
         </p>
       </div>
@@ -226,9 +272,7 @@ export default function WeekPlanner() {
       {/* Day grid */}
       <div className="space-y-3">
         {!generated && (
-          <p className="text-xs uppercase tracking-widest" style={{ color: '#9B8E84' }}>
-            your week · you can type multiple events e.g. "gym and dinner"
-          </p>
+          <p className="text-xs uppercase tracking-widest" style={{ color: '#9B8E84' }}>your week</p>
         )}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {DAYS.map((day, i) => (
@@ -236,30 +280,35 @@ export default function WeekPlanner() {
               <DayCard
                 day={day}
                 date={weekDates[i]}
-                occasion={occasions[day]}
-                onOccasionChange={val => setOccasion(day, val)}
+                tags={dayTags[day]}
+                onAddTag={tag => addTag(day, tag)}
+                onRemoveTag={tag => removeTag(day, tag)}
                 outfitData={getOutfitData(day)}
                 generated={generated}
                 expanded={expandedDay === day}
                 onToggleExpand={() => setExpandedDay(p => p === day ? null : day)}
               />
-              {/* Quick fill chips — only before generation */}
+
+              {/* Quick fill chips — additive, shown before generation */}
               {!generated && (
                 <div className="flex flex-wrap gap-1">
-                  {QUICK_FILL.map(chip => (
-                    <button
-                      key={chip}
-                      onClick={() => setOccasion(day, occasions[day] === chip ? '' : chip)}
-                      className="text-[10px] px-2 py-0.5 rounded-full border transition-all"
-                      style={{
-                        borderColor: occasions[day] === chip ? '#8B1A1A' : '#E3D9CE',
-                        backgroundColor: occasions[day] === chip ? '#F0DADA' : 'transparent',
-                        color: occasions[day] === chip ? '#6B1010' : '#9B8E84',
-                      }}
-                    >
-                      {chip}
-                    </button>
-                  ))}
+                  {QUICK_FILL.map(chip => {
+                    const active = dayTags[day].includes(chip)
+                    return (
+                      <button
+                        key={chip}
+                        onClick={() => toggleChip(day, chip)}
+                        className="text-[10px] px-2 py-0.5 rounded-full border transition-all"
+                        style={{
+                          borderColor: active ? '#8B1A1A' : '#E3D9CE',
+                          backgroundColor: active ? '#F0DADA' : 'transparent',
+                          color: active ? '#6B1010' : '#9B8E84',
+                        }}
+                      >
+                        {chip}
+                      </button>
+                    )
+                  })}
                 </div>
               )}
             </div>

@@ -259,6 +259,7 @@ def suggest_personalized_outfit(
     board_inspo: str | None = None,
     style_vibes: list[str] | None = None,
     disabled_rules: list[str] | None = None,
+    wardrobe_taste: str | None = None,
 ) -> tuple[list[int], str]:
     """Pick one outfit using Claude, informed by the user's inspo aesthetic and mood."""
     if not wardrobe_items:
@@ -279,6 +280,7 @@ def suggest_personalized_outfit(
     condition = weather["description"]
 
     inspo_line    = f"User's personal style from their inspo board:\n{inspo_context}\n\n" if inspo_context else ""
+    taste_line    = f"{wardrobe_taste}\n\n" if wardrobe_taste else ""
     occasion_line = f"Occasion: {occasion}.\n" if occasion else ""
     vibe_line     = f"User's personal aesthetic/style identity: {', '.join(style_vibes)}.\n" if style_vibes else ""
     board_section = ""
@@ -300,6 +302,7 @@ def suggest_personalized_outfit(
     prompt = (
         "You are a personal stylist who knows this user's taste.\n\n"
         f"{inspo_line}"
+        f"{taste_line}"
         f"{vibe_line}"
         f"How they're feeling today: {mood}.\n"
         f"{occasion_line}"

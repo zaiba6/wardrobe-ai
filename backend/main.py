@@ -101,6 +101,38 @@ def _delete_upload_file(filename: str) -> None:
         pass
 
 
+def _analyze_wardrobe_taste(wardrobe_summary: list[dict]) -> str:
+    """Infer style preferences from the user's wardrobe composition."""
+    if len(wardrobe_summary) < 4:
+        return ""
+    from collections import Counter
+
+    # Color words (strip stop words / modifiers)
+    _stop = {"and", "with", "a", "an", "the", "in", "of", "light", "dark",
+             "bright", "deep", "pale", "soft", "rich", "warm", "cool", "tone"}
+    color_words: list[str] = []
+    for item in wardrobe_summary:
+        for word in item["color"].lower().replace(",", " ").split():
+            if word not in _stop and len(word) > 2:
+                color_words.append(word)
+
+    top_colors = [w for w, _ in Counter(color_words).most_common(10)][:5]
+    top_fit    = Counter(i["fit"] for i in wardrobe_summary).most_common(1)[0][0]
+    top_form   = Counter(i["formality"] for i in wardrobe_summary).most_common(1)[0][0]
+
+    parts = []
+    if top_colors:
+        parts.append(f"colour palette leans toward {', '.join(top_colors)}")
+    parts.append(f"preferred fit: {top_fit}")
+    parts.append(f"formality comfort zone: {top_form}")
+
+    return (
+        "WARDROBE PROFILE (inferred from what they actually own): "
+        + " · ".join(parts)
+        + " — favour these traits when choosing between comparable items."
+    )
+
+
 def serialize_clothing(item: ClothingItem) -> dict:
     return {
         "id": item.id,
@@ -772,6 +804,7 @@ def suggest_outfit(body: OutfitSuggestBody, user_id: int = Depends(get_current_u
         board_inspo_ctx = "; ".join(i.style_notes for i in board_items if i.style_notes)[:500]
 
     style_vibes, disabled_rules = _get_user_settings(user_id, db)
+    wardrobe_taste = _analyze_wardrobe_taste(wardrobe_summary)
 
     reason   = "Here's a look for you!"
     selected = []
@@ -788,6 +821,7 @@ def suggest_outfit(body: OutfitSuggestBody, user_id: int = Depends(get_current_u
             board_inspo=board_inspo_ctx,
             style_vibes=style_vibes,
             disabled_rules=disabled_rules,
+            wardrobe_taste=wardrobe_taste,
         )
         id_order = {iid: idx for idx, iid in enumerate(item_ids)}
         selected = sorted(
@@ -1226,6 +1260,7 @@ def week_plan(body: WeekPlanBody, user_id: int = Depends(get_current_user_id), d
          "description": c.description, "formality": c.formality, "fit": c.fit, "season": c.season}
         for c in all_clothes
     ]
+    wardrobe_taste = _analyze_wardrobe_taste(wardrobe_summary)
 
     weather = None
     if body.city or (body.lat is not None and body.lon is not None):
@@ -1277,6 +1312,7 @@ def week_plan(body: WeekPlanBody, user_id: int = Depends(get_current_user_id), d
                     board_inspo=b_inspo,
                     style_vibes=style_vibes,
                     disabled_rules=disabled_rules,
+                    wardrobe_taste=wardrobe_taste,
                 )
                 used_ids.extend(item_ids)
                 id_order = {iid: idx for idx, iid in enumerate(item_ids)}
