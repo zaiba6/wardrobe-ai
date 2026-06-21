@@ -53,6 +53,7 @@ _MIGRATIONS = [
     "ALTER TABLE inspo_items ADD COLUMN style_board_id INTEGER",
     "CREATE TABLE IF NOT EXISTS user_settings (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL UNIQUE, style_vibes TEXT, disabled_rules TEXT, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)",
     "ALTER TABLE style_boards ADD COLUMN parent_id INTEGER",
+    "ALTER TABLE outfit_feedback ADD COLUMN reason TEXT",
 ]
 with engine.connect() as _conn:
     for _stmt in _MIGRATIONS:
@@ -337,6 +338,7 @@ class OutfitFeedbackBody(BaseModel):
     item_ids:  list[int]
     occasion:  Optional[str] = None
     feedback:  str           = "bad"   # "bad" | "loved"
+    reason:    Optional[str] = None    # user's explanation for bad rec
 
 
 class UserPresetBody(BaseModel):
@@ -347,8 +349,9 @@ class UserPresetBody(BaseModel):
 class DayPlanInput(BaseModel):
     date:     str            # YYYY-MM-DD
     day:      str            # "Monday" etc
-    events:   list[str] = [] # event names from Google Cal
+    events:   list[str] = [] # event names
     occasion: Optional[str] = None  # user-typed override for empty days
+    combined: bool = False   # if True, generate one outfit for all events instead of one per event
 
 
 class WeekPlanBody(BaseModel):
@@ -756,6 +759,7 @@ def outfit_feedback(body: OutfitFeedbackBody, user_id: int = Depends(get_current
         item_descs=json.dumps(descs),
         occasion=body.occasion,
         feedback=body.feedback,
+        reason=body.reason or None,
     )
     db.add(fb); db.commit()
     return {"success": True}
@@ -1380,6 +1384,10 @@ def week_plan(body: WeekPlanBody, user_id: int = Depends(get_current_user_id), d
         sub_occasions = _split_occasions(occasion_raw)
         day_outfits = []
 
+        # If user chose "one outfit for all events", collapse into a single combined occasion
+        if day.combined and len(sub_occasions) > 1:
+            sub_occasions = [" and ".join(sub_occasions)]
+
         for sub_occ in sub_occasions:
             board     = _find_matching_board(sub_occ, style_boards)
             b_rules   = board.rules if board else None
@@ -1424,6 +1432,7 @@ def week_plan(body: WeekPlanBody, user_id: int = Depends(get_current_user_id), d
             "date": day.date, "day": day.day,
             "events": day.events, "occasion": occasion_raw,
             "outfits": day_outfits, "needs_input": False,
+            "combined": day.combined,
         })
 
     return {"week": results, "weather": weather}

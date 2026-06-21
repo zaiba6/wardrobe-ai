@@ -68,6 +68,7 @@ class OutfitFeedback(Base):
     item_descs = Column(Text, nullable=True)    # JSON list of human-readable descriptions
     occasion   = Column(String, nullable=True)
     feedback   = Column(String, default="bad")  # "bad" or "loved"
+    reason     = Column(Text, nullable=True)    # user's explanation for bad rec
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 

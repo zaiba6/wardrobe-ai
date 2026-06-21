@@ -33,7 +33,79 @@ function outfitLine(items) {
   return items.map(item => item.subtype || item.type).join(' + ')
 }
 
-function DayCard({ day, date, tags, onAddTag, onRemoveTag, outfitData, generated, onFocus }) {
+// Modal shown when user clicks a generated day
+function DayModal({ dayData, date, onClose }) {
+  if (!dayData) return null
+  const outfits = dayData.outfits ?? []
+  const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
+      style={{ backgroundColor: 'rgba(45,26,14,0.5)' }}
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl p-5 space-y-5 max-h-[85vh] overflow-y-auto"
+        style={{ backgroundColor: '#FAF7F2' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-base font-semibold" style={{ color: '#2D1A0E' }}>{dateLabel}</p>
+            {dayData.events?.length > 0 && (
+              <p className="text-xs mt-0.5" style={{ color: '#9B8E84' }}>{dayData.events.join(' · ')}</p>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            className="text-lg leading-none mt-0.5"
+            style={{ color: '#C4B5AC' }}
+          >×</button>
+        </div>
+
+        {/* Outfit(s) */}
+        {outfits.length === 0 ? (
+          <p className="text-sm text-center py-6" style={{ color: '#C4B5AC' }}>rest day</p>
+        ) : (
+          outfits.map((outfit, i) => (
+            <div key={i} className={i > 0 ? 'pt-4 border-t' : ''} style={{ borderColor: '#E3D9CE' }}>
+              {outfits.length > 1 && (
+                <p className="text-[10px] uppercase tracking-widest mb-3" style={{ color: '#C4B5AC' }}>
+                  {outfit.occasion}
+                </p>
+              )}
+              {/* Item image grid */}
+              <div className="flex gap-3 flex-wrap">
+                {outfit.items.map((item, j) => (
+                  <div key={item.id ?? j} className="flex flex-col items-center gap-1.5 w-[72px]">
+                    <div className="w-[72px] h-[72px] rounded-xl overflow-hidden" style={{ backgroundColor: '#F0EAE2' }}>
+                      <img
+                        src={`${API}${item.image_url}`}
+                        alt={item.type}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <p className="text-[10px] text-center capitalize leading-tight" style={{ color: '#4A3020' }}>
+                      {item.subtype || item.type}
+                    </p>
+                    <p className="text-[9px] text-center capitalize" style={{ color: '#C4B5AC' }}>{item.color}</p>
+                  </div>
+                ))}
+              </div>
+              {outfit.reason && (
+                <p className="text-xs italic mt-3" style={{ color: '#9B8E84' }}>{outfit.reason}</p>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  )
+}
+
+function DayCard({ day, date, tags, onAddTag, onRemoveTag, outfitData, generated, onFocus, combined, onToggleCombined, onClickGenerated }) {
   const [inputVal, setInputVal] = useState('')
   const outfits  = outfitData?.outfits ?? []
   const hasOutfit = outfits.length > 0
@@ -51,12 +123,13 @@ function DayCard({ day, date, tags, onAddTag, onRemoveTag, outfitData, generated
 
   return (
     <div
-      className="rounded-xl border flex flex-col overflow-hidden"
+      className={`rounded-xl border flex flex-col overflow-hidden ${generated && hasOutfit ? 'cursor-pointer hover:shadow-sm transition-shadow' : ''}`}
       style={{
         backgroundColor: '#fff',
         borderColor: isToday ? '#C4A8A8' : hasOutfit ? '#D4C5C5' : '#E3D9CE',
         minHeight: '120px',
       }}
+      onClick={generated && hasOutfit ? onClickGenerated : undefined}
     >
       {/* Day header */}
       <div
@@ -74,22 +147,25 @@ function DayCard({ day, date, tags, onAddTag, onRemoveTag, outfitData, generated
       <div className="p-2 flex-1 space-y-1.5">
         {generated ? (
           hasOutfit ? (
-            outfits.map((outfit, i) => (
-              <div
-                key={i}
-                className={i > 0 ? 'pt-1.5 mt-1.5 border-t' : ''}
-                style={{ borderColor: '#E3D9CE' }}
-              >
-                {outfits.length > 1 && (
-                  <p className="text-[9px] uppercase tracking-wider mb-0.5" style={{ color: '#C4B5AC' }}>
-                    {outfit.occasion}
+            <>
+              {outfits.map((outfit, i) => (
+                <div
+                  key={i}
+                  className={i > 0 ? 'pt-1.5 mt-1.5 border-t' : ''}
+                  style={{ borderColor: '#E3D9CE' }}
+                >
+                  {outfits.length > 1 && (
+                    <p className="text-[9px] uppercase tracking-wider mb-0.5" style={{ color: '#C4B5AC' }}>
+                      {outfit.occasion}
+                    </p>
+                  )}
+                  <p className="text-[11px] leading-relaxed" style={{ color: '#4A3020' }}>
+                    {outfitLine(outfit.items)}
                   </p>
-                )}
-                <p className="text-[11px] leading-relaxed" style={{ color: '#4A3020' }}>
-                  {outfitLine(outfit.items)}
-                </p>
-              </div>
-            ))
+                </div>
+              ))}
+              <p className="text-[9px]" style={{ color: '#C4B5AC' }}>tap to see →</p>
+            </>
           ) : (
             <p className="text-[10px]" style={{ color: '#C4B5AC' }}>rest day</p>
           )
@@ -105,8 +181,8 @@ function DayCard({ day, date, tags, onAddTag, onRemoveTag, outfitData, generated
                   >
                     {tag}
                     <button
-                      onClick={() => onRemoveTag(tag)}
-                      className="leading-none hover:text-red-700"
+                      onClick={e => { e.stopPropagation(); onRemoveTag(tag) }}
+                      className="leading-none"
                       style={{ color: '#9B6060' }}
                     >×</button>
                   </span>
@@ -126,6 +202,20 @@ function DayCard({ day, date, tags, onAddTag, onRemoveTag, outfitData, generated
               className="w-full text-[11px] bg-transparent border-b focus:outline-none pb-0.5"
               style={{ borderColor: inputVal ? '#8B1A1A' : '#E3D9CE', color: '#2D1A0E' }}
             />
+            {/* Combined toggle — only shown when 2+ events */}
+            {tags.length > 1 && (
+              <button
+                onClick={e => { e.stopPropagation(); onToggleCombined() }}
+                className="text-[9px] rounded-full px-1.5 py-0.5 border transition-all"
+                style={{
+                  borderColor: combined ? '#8B1A1A' : '#E3D9CE',
+                  backgroundColor: combined ? '#F0DADA' : 'transparent',
+                  color: combined ? '#6B1010' : '#C4B5AC',
+                }}
+              >
+                {combined ? 'one outfit' : 'separate →'}
+              </button>
+            )}
           </>
         )}
       </div>
@@ -137,6 +227,7 @@ export default function WeekPlanner() {
   const weekDates = getWeekDates()
 
   const [dayTags, setDayTags]       = useState(Object.fromEntries(DAYS.map(d => [d, []])))
+  const [dayMode, setDayMode]       = useState(Object.fromEntries(DAYS.map(d => [d, false]))) // false = separate
   const [city, setCity]             = useState('')
   const [coords, setCoords]         = useState(null)
   const [locating, setLocating]     = useState(false)
@@ -146,6 +237,7 @@ export default function WeekPlanner() {
   const [error, setError]           = useState('')
   const [generated, setGenerated]   = useState(false)
   const [focusedDay, setFocusedDay] = useState(null)
+  const [modalDay, setModalDay]     = useState(null)   // day name for detail modal
 
   const addTag = (day, tag) => {
     const clean = tag.trim().toLowerCase()
@@ -160,6 +252,10 @@ export default function WeekPlanner() {
   const toggleChip = (chip) => {
     if (!focusedDay) return
     dayTags[focusedDay].includes(chip) ? removeTag(focusedDay, chip) : addTag(focusedDay, chip)
+  }
+
+  const toggleCombined = (day) => {
+    setDayMode(p => ({ ...p, [day]: !p[day] }))
   }
 
   const handleGetLocation = () => {
@@ -177,6 +273,7 @@ export default function WeekPlanner() {
       day,
       events:   dayTags[day],
       occasion: dayTags[day].join(' and ') || null,
+      combined: dayMode[day],
     }))
     setGenerating(true)
     setError('')
@@ -202,12 +299,19 @@ export default function WeekPlanner() {
     setWeather(null)
     setError('')
     setFocusedDay(null)
+    setModalDay(null)
     setDayTags(Object.fromEntries(DAYS.map(d => [d, []])))
+    setDayMode(Object.fromEntries(DAYS.map(d => [d, false])))
   }
 
   const hasLocation  = coords || city.trim()
   const anyOccasion  = DAYS.some(d => dayTags[d].length > 0)
   const getOutfitData = (day) => weekData.find(w => w.day === day) ?? null
+
+  const modalData = modalDay ? {
+    data: getOutfitData(modalDay),
+    date: weekDates[DAYS.indexOf(modalDay)],
+  } : null
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -217,12 +321,12 @@ export default function WeekPlanner() {
         <p className="text-sm mt-1" style={{ color: '#9B8E84' }}>
           {weather
             ? `${weatherEmoji(weather.description)} ${weather.city} · ${Math.round(weather.temp_fahrenheit)}°F this week`
-            : "tap a day and add your events, then i'll plan each look"
+            : "tap a day, add your events — i'll plan each look"
           }
         </p>
       </div>
 
-      {/* Location — compact row, hidden after generation */}
+      {/* Location — compact, hidden after generation */}
       {!generated && (
         <div className="flex items-center gap-2">
           {coords ? (
@@ -270,11 +374,14 @@ export default function WeekPlanner() {
             outfitData={getOutfitData(day)}
             generated={generated}
             onFocus={() => setFocusedDay(day)}
+            combined={dayMode[day]}
+            onToggleCombined={() => toggleCombined(day)}
+            onClickGenerated={() => setModalDay(day)}
           />
         ))}
       </div>
 
-      {/* Quick-fill chips — shared, shown when a day is focused */}
+      {/* Shared quick-fill chips (shown when a day is focused) */}
       {!generated && focusedDay && (
         <div className="space-y-2 rounded-xl border p-3" style={{ backgroundColor: '#FAF7F2', borderColor: '#E3D9CE' }}>
           <p className="text-[10px] uppercase tracking-widest" style={{ color: '#C4B5AC' }}>
@@ -299,6 +406,14 @@ export default function WeekPlanner() {
               )
             })}
           </div>
+          {dayTags[focusedDay]?.length > 1 && (
+            <p className="text-[10px]" style={{ color: '#C4B5AC' }}>
+              {dayMode[focusedDay]
+                ? 'one outfit planned for all events'
+                : 'separate outfit per event — tap "separate →" on the day to combine'
+              }
+            </p>
+          )}
         </div>
       )}
 
@@ -327,7 +442,7 @@ export default function WeekPlanner() {
         </button>
       ) : (
         <div className="flex items-center gap-3">
-          <p className="text-sm" style={{ color: '#7A9E7A' }}>✓ week planned</p>
+          <p className="text-sm" style={{ color: '#7A9E7A' }}>✓ week planned — tap any day to see your look</p>
           <button
             onClick={handleReset}
             className="text-xs rounded-full px-3 py-1.5 border"
@@ -336,6 +451,15 @@ export default function WeekPlanner() {
             start over
           </button>
         </div>
+      )}
+
+      {/* Day detail modal */}
+      {modalDay && modalData && (
+        <DayModal
+          dayData={modalData.data}
+          date={modalData.date}
+          onClose={() => setModalDay(null)}
+        />
       )}
     </div>
   )

@@ -16,7 +16,8 @@ _STRAPLESS_RULE = """STRAPLESS / STRAP RULE:
 _ONE_TOP_RULE = """ONE TOP RULE:
 - An outfit may only contain ONE top (tank top, t-shirt, blouse, crop top, going-out top, bodysuit, etc.)
 - A layer must be OUTERWEAR (blazer, jacket, cardigan, coat) — never a second top
-- If you want to add a second top as a layer, use a blazer or cardigan from the wardrobe instead"""
+- If you want to add a second top as a layer, use a blazer or cardigan from the wardrobe instead
+- A dress is a COMPLETE outfit on its own — NEVER layer any shirt, blouse, or top underneath a dress. Only outerwear (jacket, blazer, cardigan, coat) may go over a dress."""
 
 _FORMALITY_RULE = """OCCASION-FORMALITY MATCHING:
 - For going-out / night-out: strongly prefer items with going-out top, going-out dress, bodycon, slip dress, mini skirt subtypes

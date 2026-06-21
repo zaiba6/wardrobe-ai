@@ -338,6 +338,11 @@ def suggest_personalized_outfit(
 
     rules = get_rules_for_prompt(occasion, disabled_rules)
 
+    # Mood-specific overrides injected directly into the prompt
+    mood_overrides = ""
+    if mood and "comfy" in mood.lower():
+        mood_overrides = "MOOD OVERRIDE (comfy selected): Do NOT suggest heels of any kind — flats, sneakers, loafers, or sandals only.\n\n"
+
     bad_combos_line = ""
     if bad_combos:
         formatted = "\n".join(f"  - {', '.join(combo)}" for combo in bad_combos[:15])
@@ -354,6 +359,7 @@ def suggest_personalized_outfit(
         f"How they're feeling today: {mood}.\n"
         f"{occasion_line}"
         f"Current weather: {temp_c}°C ({temp_f}°F), {condition}.\n\n"
+        f"{mood_overrides}"
         f"{bad_combos_line}"
         f"{board_section}"
         f"{rules}\n\n"

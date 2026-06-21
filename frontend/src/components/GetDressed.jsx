@@ -90,14 +90,22 @@ function EmptyOutfit() {
 }
 
 function OutfitCard({ outfit, mood, occasion, weather, onRefresh, onBadRec, refreshing }) {
-  const [saved, setSaved]   = useState(false)
-  const [saving, setSaving] = useState(false)
+  const [saved, setSaved]           = useState(false)
+  const [saving, setSaving]         = useState(false)
+  const [showFeedback, setShowFeedback] = useState(false)
+  const [feedbackReason, setFeedbackReason] = useState('')
 
   const handleSave = async () => {
     setSaving(true)
     const ok = await saveOutfitLog({ items: outfit.items, mood, occasion, weather })
     setSaving(false)
     if (ok) setSaved(true)
+  }
+
+  const submitBadRec = (reason) => {
+    setShowFeedback(false)
+    setFeedbackReason('')
+    onBadRec(reason)
   }
 
   return (
@@ -132,14 +140,48 @@ function OutfitCard({ outfit, mood, occasion, weather, onRefresh, onBadRec, refr
           {refreshing ? 'finding another…' : 'try another →'}
         </button>
         <button
-          onClick={onBadRec}
+          onClick={() => setShowFeedback(p => !p)}
           disabled={refreshing}
           className="text-xs rounded-full px-4 py-1.5 border transition-all disabled:opacity-60"
-          style={{ borderColor: '#E8CECE', color: '#8B1A1A', backgroundColor: '#FDF5F5' }}
+          style={showFeedback
+            ? { borderColor: '#8B1A1A', color: '#8B1A1A', backgroundColor: '#F0DADA' }
+            : { borderColor: '#E8CECE', color: '#8B1A1A', backgroundColor: '#FDF5F5' }
+          }
         >
           👎 bad rec
         </button>
       </div>
+
+      {showFeedback && (
+        <div className="rounded-xl border p-3.5 space-y-3" style={{ borderColor: '#E8CECE', backgroundColor: '#FDF5F5' }}>
+          <p className="text-xs font-medium" style={{ color: '#8B1A1A' }}>what didn't work?</p>
+          <textarea
+            autoFocus
+            value={feedbackReason}
+            onChange={e => setFeedbackReason(e.target.value)}
+            placeholder="e.g. i hate that top, wrong vibe for the occasion, colors don't match…"
+            rows={2}
+            className="w-full text-xs bg-transparent border rounded-lg px-3 py-2 focus:outline-none resize-none"
+            style={{ borderColor: '#E8CECE', color: '#4A3020' }}
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={() => submitBadRec(feedbackReason)}
+              className="text-xs rounded-full px-4 py-1.5 font-medium"
+              style={{ backgroundColor: '#8B1A1A', color: '#fff' }}
+            >
+              send + find another
+            </button>
+            <button
+              onClick={() => submitBadRec('')}
+              className="text-xs rounded-full px-4 py-1.5 border"
+              style={{ borderColor: '#E8CECE', color: '#9B8E84' }}
+            >
+              skip explanation
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -249,13 +291,14 @@ export default function GetDressed() {
     }
   }
 
-  const handleBadRec = async () => {
+  const handleBadRec = async (reason = '') => {
     if (!result?.outfit?.items?.length) return
     const currentIds = result.outfit.items.map(i => i.id)
     axios.post(`${API}/api/outfit/feedback`, {
       item_ids: currentIds,
       occasion: occasion || null,
       feedback: 'bad',
+      reason: reason || null,
     }).catch(() => {})
     handleRefresh()
   }
