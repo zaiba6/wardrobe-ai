@@ -1,6 +1,8 @@
 import base64
 import json
 import os
+import re
+import time
 from pathlib import Path
 
 import anthropic
@@ -9,6 +11,21 @@ from taxonomy import normalize_clothing_tags
 from fashion_rules import get_rules_for_prompt
 
 load_dotenv()
+
+# #region agent log
+_DEBUG_LOG_PATH = "/Users/zaiba/Desktop/wardrobe-ai/.cursor/debug-66e2c0.log"
+_MD_MARKERS_RE = re.compile(r"\*\*|(?:^|\n)\s*\d+\.\s|(?:^|\n)\s*-\s")
+
+
+def _debug_log(entry: dict) -> None:
+    try:
+        entry.setdefault("sessionId", "66e2c0")
+        entry.setdefault("timestamp", int(time.time() * 1000))
+        with open(_DEBUG_LOG_PATH, "a") as f:
+            f.write(json.dumps(entry) + "\n")
+    except Exception:
+        pass
+# #endregion
 
 _client = None
 
@@ -584,10 +601,36 @@ def stylist_chat(
         messages=claude_messages,
     )
 
-    raw = _strip_json_fence(message.content[0].text)
+    raw_text = message.content[0].text
+    raw = _strip_json_fence(raw_text)
+    # #region agent log
+    _debug_log({
+        "hypothesisId": "H2/H3", "location": "ai.py:stylist_chat:pre-parse",
+        "message": "raw claude output before json.loads",
+        "data": {
+            "starts_with_fence": raw_text.strip().startswith("```"),
+            "contains_fence_later": "```" in raw_text.strip()[3:] if len(raw_text.strip()) > 3 else False,
+            "raw_head": raw[:400],
+            "raw_len": len(raw),
+        },
+    })
+    # #endregion
     try:
         result = json.loads(raw)
-    except json.JSONDecodeError:
+        # #region agent log
+        _debug_log({
+            "hypothesisId": "H2", "location": "ai.py:stylist_chat:parse-ok",
+            "message": "json parse succeeded", "data": {"keys": list(result.keys())},
+        })
+        # #endregion
+    except json.JSONDecodeError as e:
+        # #region agent log
+        _debug_log({
+            "hypothesisId": "H2/H3", "location": "ai.py:stylist_chat:parse-fail",
+            "message": "json parse FAILED — falling back to raw text as reply",
+            "data": {"error": str(e), "raw_head": raw[:600]},
+        })
+        # #endregion
         return {
             "reply": raw[:500] if raw else "I blanked for a second — try that again?",
             "mode": "ask",
@@ -635,8 +678,17 @@ def stylist_chat(
     if weather_city is not None:
         weather_city = str(weather_city).strip() or None
 
+    reply_text = str(result.get("reply") or "Here's what I'm thinking.").strip()
+    # #region agent log
+    _debug_log({
+        "hypothesisId": "H1", "location": "ai.py:stylist_chat:reply-check",
+        "message": "checking reply for unrendered markdown",
+        "data": {"has_markdown_markers": bool(_MD_MARKERS_RE.search(reply_text)), "reply_head": reply_text[:300]},
+    })
+    # #endregion
+
     return {
-        "reply": str(result.get("reply") or "Here's what I'm thinking.").strip(),
+        "reply": reply_text,
         "mode": mode,
         "follow_ups": follow_ups,
         "weather_city": weather_city,
