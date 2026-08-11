@@ -18,6 +18,10 @@ TOKEN_EXPIRE_DAYS    = 30
 APP_URL      = os.getenv("APP_URL", "http://localhost:8000")
 REDIRECT_URI = f"{APP_URL}/api/auth/callback"
 
+# Custom URL scheme for the native iOS app; must match CFBundleURLScheme in
+# the Capacitor iOS project's Info.plist and APP_SCHEME in frontend/src/lib/nativeAuth.js.
+APP_SCHEME   = os.getenv("APP_SCHEME", "wardrobeai")
+
 GOOGLE_AUTH_URL  = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_INFO_URL  = "https://www.googleapis.com/oauth2/v2/userinfo"

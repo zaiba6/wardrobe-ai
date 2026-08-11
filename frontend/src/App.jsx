@@ -8,9 +8,11 @@ import Inspo from './components/Inspo'
 import OutfitsWorn from './components/OutfitsWorn'
 import WeekPlanner from './components/WeekPlanner'
 import Settings from './components/Settings'
+import StylistChat from './components/StylistChat'
 
 const TABS = [
   { key: 'closet',    label: 'the floordrobe' },
+  { key: 'chat',      label: 'ask the closet' },
   { key: 'inspo',     label: 'inspo board' },
   { key: 'today',     label: "today's look" },
   { key: 'week',      label: 'week planner' },
@@ -86,9 +88,10 @@ function AppShell() {
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-10">
-        {activeTab === 'closet' && <Wardrobe />}
-        {activeTab === 'today'  && <GetDressed />}
-        {activeTab === 'week'   && <WeekPlanner />}
+        {activeTab === 'closet'   && <Wardrobe />}
+        {activeTab === 'chat'     && <StylistChat />}
+        {activeTab === 'today'    && <GetDressed />}
+        {activeTab === 'week'     && <WeekPlanner />}
         {activeTab === 'worn'     && <OutfitsWorn />}
         {activeTab === 'inspo'    && <Inspo />}
         {activeTab === 'settings' && <Settings />}

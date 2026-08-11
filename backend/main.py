@@ -20,11 +20,19 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from ai import analyze_inspo_image, auto_categorize_inspo, detect_all_items, suggest_personalized_outfit, suggest_vibe_outfit, tag_clothing_image
+from ai import (
+    analyze_inspo_image,
+    auto_categorize_inspo,
+    detect_all_items,
+    stylist_chat,
+    suggest_personalized_outfit,
+    suggest_vibe_outfit,
+    tag_clothing_image,
+)
 from taxonomy import VALID_SUBTYPES as SUBTYPES
 from auth import (
     GOOGLE_AUTH_URL, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
-    GOOGLE_INFO_URL, GOOGLE_TOKEN_URL, REDIRECT_URI, APP_URL,
+    GOOGLE_INFO_URL, GOOGLE_TOKEN_URL, REDIRECT_URI, APP_URL, APP_SCHEME,
     create_access_token, get_current_user_id, get_optional_user_id,
     get_or_create_user, CALENDAR_SCOPES,
 )
@@ -362,6 +370,18 @@ class WeekPlanBody(BaseModel):
     mood: Optional[str]   = None
 
 
+class ChatMessage(BaseModel):
+    role:    str  # "user" | "assistant"
+    content: str
+
+
+class StylistChatBody(BaseModel):
+    messages: list[ChatMessage]
+    city:     Optional[str]   = None
+    lat:      Optional[float] = None
+    lon:      Optional[float] = None
+
+
 # ---------------------------------------------------------------------------
 # Google token refresh helper
 # ---------------------------------------------------------------------------
@@ -406,7 +426,7 @@ def health():
 # ---------------------------------------------------------------------------
 
 @app.get("/api/auth/google")
-def auth_google():
+def auth_google(platform: str = "web"):
     if not GOOGLE_CLIENT_ID:
         raise HTTPException(status_code=500, detail="Google OAuth is not configured.")
     params = {
@@ -416,12 +436,15 @@ def auth_google():
         "scope":         CALENDAR_SCOPES,
         "access_type":   "offline",
         "prompt":        "select_account",
+        # Echoed back to the callback so we know whether to return the token
+        # to the web app (query redirect) or the native app (custom scheme).
+        "state":         "ios" if platform == "ios" else "web",
     }
     return RedirectResponse(f"{GOOGLE_AUTH_URL}?{urlencode(params)}")
 
 
 @app.get("/api/auth/callback")
-def auth_callback(code: str, db: Session = Depends(get_db)):
+def auth_callback(code: str, state: str = "web", db: Session = Depends(get_db)):
     # Exchange code → tokens
     token_resp = http_requests.post(GOOGLE_TOKEN_URL, data={
         "client_id":     GOOGLE_CLIENT_ID,
@@ -452,7 +475,10 @@ def auth_callback(code: str, db: Session = Depends(get_db)):
                                 access_token=google_access, refresh_token=google_refresh, token_expiry=token_expiry)
     token = create_access_token(user.id, user.email)
 
-    # Redirect to frontend with token in query param
+    # Native app: bounce the token back into the app via its custom URL scheme.
+    # Web: redirect to the frontend with the token as a query param.
+    if state == "ios":
+        return RedirectResponse(f"{APP_SCHEME}://auth?token={token}")
     return RedirectResponse(f"{APP_URL}/?token={token}")
 
 
@@ -787,6 +813,101 @@ def delete_preset(preset_id: int, user_id: int = Depends(get_current_user_id), d
         raise HTTPException(status_code=404, detail="Preset not found.")
     db.delete(p); db.commit()
     return {"success": True}
+
+
+@app.post("/api/chat")
+def stylist_chat_endpoint(
+    body: StylistChatBody,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Conversational stylist — packing trips + one-off 'what should I wear'."""
+    history = [{"role": m.role, "content": m.content} for m in body.messages if m.content.strip()]
+    if not history:
+        raise HTTPException(status_code=400, detail="Send at least one message.")
+
+    all_clothes = db.query(ClothingItem).filter(ClothingItem.user_id == user_id).all()
+    wardrobe_summary = [
+        {
+            "id": c.id, "type": c.type, "subtype": c.subtype, "color": c.color,
+            "description": c.description, "formality": c.formality, "fit": c.fit, "season": c.season,
+        }
+        for c in all_clothes
+    ]
+    clothes_by_id = {c.id: c for c in all_clothes}
+
+    inspo_items = db.query(InspoItem).filter(InspoItem.user_id == user_id).all()
+    inspo_context = "; ".join(it.style_notes for it in inspo_items if it.style_notes)[:2000]
+    style_vibes, _disabled = _get_user_settings(user_id, db)
+    wardrobe_taste = _analyze_wardrobe_taste(wardrobe_summary)
+
+    weather = None
+    if body.lat is not None and body.lon is not None:
+        try:
+            weather = _resolve_weather(None, body.lat, body.lon)
+        except Exception:
+            weather = None
+    elif body.city:
+        try:
+            weather = _resolve_weather(body.city, None, None)
+        except Exception:
+            weather = None
+
+    try:
+        result = stylist_chat(
+            history=history,
+            wardrobe_items=wardrobe_summary,
+            weather=weather,
+            inspo_context=inspo_context,
+            style_vibes=style_vibes,
+            wardrobe_taste=wardrobe_taste,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Stylist failed: {e}") from e
+
+    # If the model discovered a city and we still have no weather, fetch once and re-ask
+    # with weather so recommendations can be climate-aware.
+    asked_city = result.get("weather_city")
+    if asked_city and weather is None:
+        try:
+            weather = _resolve_weather(asked_city, None, None)
+            result = stylist_chat(
+                history=history,
+                wardrobe_items=wardrobe_summary,
+                weather=weather,
+                inspo_context=inspo_context,
+                style_vibes=style_vibes,
+                wardrobe_taste=wardrobe_taste,
+            )
+        except Exception:
+            pass
+
+    def hydrate(rows):
+        out = []
+        for row in rows:
+            items = []
+            for iid in row.get("item_ids") or []:
+                c = clothes_by_id.get(iid)
+                if c:
+                    items.append(serialize_clothing(c))
+            if not items:
+                continue
+            out.append({
+                "label":  row.get("label") or "Look",
+                "reason": row.get("reason") or row.get("notes") or "",
+                "notes":  row.get("notes") or "",
+                "items":  items,
+            })
+        return out
+
+    return {
+        "reply":          result.get("reply"),
+        "mode":           result.get("mode") or "ask",
+        "follow_ups":     result.get("follow_ups") or [],
+        "weather":        weather,
+        "outfits":        hydrate(result.get("outfits") or []),
+        "packing_lists":  hydrate(result.get("packing_lists") or []),
+    }
 
 
 @app.post("/api/outfit/suggest")

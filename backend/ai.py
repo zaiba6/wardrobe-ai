@@ -460,3 +460,186 @@ def suggest_vibe_outfit(
     item_ids = [int(i) for i in result.get("item_ids", [])]
     reason = result.get("reason", "Here's a great outfit for you!")
     return item_ids, reason
+
+
+def _strip_json_fence(raw: str) -> str:
+    text = raw.strip()
+    if text.startswith("```"):
+        text = text.split("```")[1]
+        if text.startswith("json"):
+            text = text[4:]
+        text = text.strip()
+    return text
+
+
+def stylist_chat(
+    history: list[dict],
+    wardrobe_items: list[dict],
+    weather: dict | None = None,
+    inspo_context: str = "",
+    style_vibes: list[str] | None = None,
+    wardrobe_taste: str | None = None,
+) -> dict:
+    """
+    Multi-turn closet stylist. Asks clarifying questions, then recommends
+    outfits or packing lists using ONLY the user's wardrobe item IDs.
+
+    history: [{role: "user"|"assistant", content: str}, ...] — latest user
+    message should already be the last entry.
+    """
+    if not wardrobe_items:
+        return {
+            "reply": "Your closet is empty — add a few pieces first and I can help you pack or get dressed.",
+            "mode": "ask",
+            "follow_ups": ["take me to my closet"],
+            "weather_city": None,
+            "outfits": [],
+            "packing_lists": [],
+        }
+
+    client = _get_client()
+
+    wardrobe_text = "\n".join(
+        f"ID {item['id']}: {item['color']} {item.get('subtype') or item['type']} "
+        f"({item['formality']}, {item['fit']}, {item['season']}) — {item['description']}"
+        for item in wardrobe_items
+    )
+
+    weather_block = "Weather: not fetched yet.\n"
+    if weather:
+        weather_block = (
+            f"Weather for {weather.get('city', 'the location')}: "
+            f"{weather['temp_celsius']}°C ({weather['temp_fahrenheit']}°F), "
+            f"{weather.get('description') or weather.get('condition')}.\n"
+        )
+
+    inspo_line = f"Inspo / taste notes:\n{inspo_context}\n\n" if inspo_context else ""
+    taste_line = f"{wardrobe_taste}\n\n" if wardrobe_taste else ""
+    vibe_line = f"Aesthetic identity: {', '.join(style_vibes)}.\n" if style_vibes else ""
+
+    system = (
+        "You are the in-app stylist for \"wait what do i wear?\" — warm, concise, slightly witty, "
+        "never corporate. You ONLY recommend pieces from the user's closet (IDs below).\n\n"
+        "GOALS you handle:\n"
+        "1) PACKING — trip for N days. Ask smart clarifying questions BEFORE listing a pack "
+        "(location/city, dates or # of days, forecast if unknown, activities, dress codes, "
+        "laundry access, suitcase limit / how many pieces allowed, shoes limit, must-bring items).\n"
+        "2) OUTFIT — one occasion (\"the Lavel in Toronto for a drink tonight\"). Infer vibe from "
+        "venue/occasion language. Ask only what's missing (city if unknown, formality, comfort).\n"
+        "3) GENERAL style questions using their closet.\n\n"
+        "RULES:\n"
+        "- Prefer asking 1–2 focused questions at a time over a long questionnaire.\n"
+        "- When you know enough, recommend. For packing: group by day and/or essentials; "
+        "reuse pieces across days when realistic; respect max item counts the user sets.\n"
+        "- Always include shoes when recommending a wearable look if shoes exist in the closet.\n"
+        "- Weather: cold (<15°C) → outerwear; mild evening plans → suggest a light layer in notes.\n"
+        "- If the user names a city and weather isn't provided yet, set weather_city to that city "
+        "(plain city name, e.g. \"Toronto\") so the app can fetch weather. Don't invent temps.\n"
+        "- item_ids MUST be integers from the wardrobe list. Never invent IDs.\n"
+        "- Keep reply to 2–5 short sentences. Put the outfit/pack details in structured fields.\n\n"
+        f"{weather_block}"
+        f"{inspo_line}"
+        f"{taste_line}"
+        f"{vibe_line}"
+        f"Wardrobe:\n{wardrobe_text}\n\n"
+        "Respond with ONLY valid JSON (no markdown):\n"
+        "{\n"
+        '  "reply": "string spoken to the user",\n'
+        '  "mode": "ask" | "outfit" | "pack",\n'
+        '  "follow_ups": ["short chip the user can tap", "..."],\n'
+        '  "weather_city": "City name or null",\n'
+        '  "outfits": [{"label": "Tonight", "item_ids": [1,2], "reason": "why"}],\n'
+        '  "packing_lists": [{"label": "Day 1 / Essentials", "item_ids": [1,2], "notes": "optional"}]\n'
+        "}\n"
+        "Use empty arrays when not recommending yet. follow_ups: 0–4 short phrases."
+    )
+
+    # Build Claude messages: system as first user preamble is less ideal than system param;
+    # Anthropic supports system=. Keep history as alternating user/assistant.
+    claude_messages = []
+    for msg in history[-16:]:
+        role = msg.get("role")
+        content = (msg.get("content") or "").strip()
+        if role not in ("user", "assistant") or not content:
+            continue
+        claude_messages.append({"role": role, "content": content})
+
+    if not claude_messages or claude_messages[-1]["role"] != "user":
+        return {
+            "reply": "Tell me what you're dressing for — a trip, a night out, anything.",
+            "mode": "ask",
+            "follow_ups": [
+                "packing for a trip",
+                "what should I wear tonight?",
+            ],
+            "weather_city": None,
+            "outfits": [],
+            "packing_lists": [],
+        }
+
+    message = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=900,
+        system=system,
+        messages=claude_messages,
+    )
+
+    raw = _strip_json_fence(message.content[0].text)
+    try:
+        result = json.loads(raw)
+    except json.JSONDecodeError:
+        return {
+            "reply": raw[:500] if raw else "I blanked for a second — try that again?",
+            "mode": "ask",
+            "follow_ups": [],
+            "weather_city": None,
+            "outfits": [],
+            "packing_lists": [],
+        }
+
+    valid_ids = {int(item["id"]) for item in wardrobe_items}
+
+    def _clean_picks(rows, id_key="item_ids"):
+        cleaned = []
+        for row in rows or []:
+            if not isinstance(row, dict):
+                continue
+            ids = []
+            for i in row.get(id_key) or []:
+                try:
+                    iid = int(i)
+                except (TypeError, ValueError):
+                    continue
+                if iid in valid_ids:
+                    ids.append(iid)
+            if not ids:
+                continue
+            cleaned.append({
+                "label": row.get("label") or "Look",
+                "item_ids": ids,
+                "reason": row.get("reason") or row.get("notes") or "",
+                "notes": row.get("notes") or "",
+            })
+        return cleaned
+
+    mode = result.get("mode") or "ask"
+    if mode not in ("ask", "outfit", "pack"):
+        mode = "ask"
+
+    follow_ups = result.get("follow_ups") or []
+    if not isinstance(follow_ups, list):
+        follow_ups = []
+    follow_ups = [str(x).strip() for x in follow_ups if str(x).strip()][:4]
+
+    weather_city = result.get("weather_city")
+    if weather_city is not None:
+        weather_city = str(weather_city).strip() or None
+
+    return {
+        "reply": str(result.get("reply") or "Here's what I'm thinking.").strip(),
+        "mode": mode,
+        "follow_ups": follow_ups,
+        "weather_city": weather_city,
+        "outfits": _clean_picks(result.get("outfits")),
+        "packing_lists": _clean_picks(result.get("packing_lists")),
+    }

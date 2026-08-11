@@ -1,3 +1,5 @@
+import { startGoogleLogin } from '../lib/nativeAuth'
+
 const API = import.meta.env.VITE_API_URL ?? ''
 
 export default function Login() {
@@ -25,8 +27,8 @@ export default function Login() {
         </div>
 
         {/* Google button */}
-        <a
-          href={`${API}/api/auth/google`}
+        <button
+          onClick={() => startGoogleLogin(API)}
           className="flex items-center justify-center gap-3 w-full rounded-full px-6 py-3.5 border text-sm font-medium transition-all hover:bg-[#F0DADA] hover:border-[#8B1A1A]"
           style={{ borderColor: '#E3D9CE', color: '#2D1A0E', backgroundColor: '#fff' }}
         >
@@ -38,7 +40,7 @@ export default function Login() {
             <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58Z" fill="#EA4335"/>
           </svg>
           Continue with Google
-        </a>
+        </button>
 
         <p className="text-xs" style={{ color: '#C4B5AC' }}>
           your closet is private — only you can see it
