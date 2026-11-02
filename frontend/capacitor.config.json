@@ -1,0 +1,8 @@
+{
+  "appId": "ai.wardrobe.app",
+  "appName": "wardrobe.ai",
+  "webDir": "dist",
+  "server": {
+    "iosScheme": "https"
+  }
+}
