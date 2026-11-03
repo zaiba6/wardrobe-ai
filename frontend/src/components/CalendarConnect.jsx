@@ -91,12 +91,12 @@ export default function CalendarConnect({ status, syncing, onConnected, onDiscon
               <button
                 key={p}
                 onClick={() => setProvider(p)}
-                className="text-xs rounded-full px-3 py-1.5 border capitalize"
+                className="text-xs rounded-full px-3 py-1.5 border"
                 style={provider === p
                   ? { borderColor: '#8B1A1A', backgroundColor: '#F0DADA', color: '#6B1010' }
                   : { borderColor: '#E3D9CE', color: '#9B8E84' }}
               >
-                {p === 'icloud' ? 'iCloud' : p}
+                {{ google: 'Google', icloud: 'iCloud', outlook: 'Outlook' }[p]}
               </button>
             ))}
           </div>

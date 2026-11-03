@@ -4,5 +4,9 @@
   "webDir": "dist",
   "server": {
     "iosScheme": "https"
+  },
+  "backgroundColor": "#FAF7F2",
+  "ios": {
+    "backgroundColor": "#FAF7F2"
   }
 }

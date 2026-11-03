@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import axios from 'axios'
 import ClothesLoader from './ClothesLoader'
 
@@ -126,9 +126,36 @@ export default function StylistChat() {
   }
 
   const empty = messages.length === 0
+  const rootRef = useRef(null)
+  const [fitTop, setFitTop] = useState(null)
+
+  // Before the first message the chat fills exactly the space left on screen and
+  // the page doesn't scroll; once a conversation starts it scrolls normally.
+  useLayoutEffect(() => {
+    if (!empty) { setFitTop(null); return }
+    const html = document.documentElement
+    const prev = [html.style.overflow, document.body.style.overflow]
+    window.scrollTo(0, 0)
+    html.style.overflow = 'hidden'
+    document.body.style.overflow = 'hidden'
+    const measure = () => setFitTop(rootRef.current?.getBoundingClientRect().top ?? 0)
+    measure()
+    window.addEventListener('resize', measure)
+    return () => {
+      window.removeEventListener('resize', measure)
+      html.style.overflow = prev[0]
+      document.body.style.overflow = prev[1]
+    }
+  }, [empty])
 
   return (
-    <div className="flex flex-col" style={{ minHeight: 'calc(100vh - 11rem)' }}>
+    <div
+      ref={rootRef}
+      className="flex flex-col"
+      style={empty && fitTop != null
+        ? { height: `calc(100dvh - ${fitTop}px - env(safe-area-inset-bottom) - 0.75rem)` }
+        : { minHeight: 'calc(100dvh - 11rem)' }}
+    >
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
           <h2 className="serif-italic text-2xl leading-none" style={{ color: '#2D1A0E' }}>
@@ -150,7 +177,7 @@ export default function StylistChat() {
       </div>
 
       {empty && (
-        <div className="flex-1 flex flex-col justify-center space-y-8 pb-8">
+        <div className="flex-1 min-h-0 flex flex-col justify-center space-y-6 pb-4">
           <p className="serif-italic text-xl max-w-md" style={{ color: '#4A3020' }}>
             tell me where you’re going — i’ll ask the boring questions, then pack or style from your floordrobe.
           </p>
