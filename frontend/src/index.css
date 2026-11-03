@@ -52,3 +52,33 @@ input, textarea, select { font-family: 'DM Sans', sans-serif; }
 .clothes-loader span:nth-child(2) { bottom: 18px; animation-delay: 0.35s; }
 .clothes-loader span:nth-child(3) { bottom: 36px; animation-delay: 0.70s; }
 .clothes-loader span:nth-child(4) { bottom: 54px; animation-delay: 1.05s; }
+
+/* Room the floating bottom tab bar takes on phones (0 extra on wider screens) */
+:root { --tabbar-space: calc(env(safe-area-inset-bottom) + 92px); }
+@media (min-width: 640px) { :root { --tabbar-space: calc(env(safe-area-inset-bottom) + 0.75rem); } }
+
+/* Motion */
+@keyframes tabPop   { 0% { transform: scale(1) } 40% { transform: scale(1.22) translateY(-2px) } 100% { transform: scale(1) } }
+@keyframes popIn    { from { opacity: 0; transform: translateY(-4px) scale(.97) } to { opacity: 1; transform: none } }
+/* opacity/translate only: a transform here would break position:fixed children and inline tilts */
+@keyframes screenIn { from { opacity: 0 } to { opacity: 1 } }
+@keyframes dealIn   { from { opacity: 0; transform: translateY(28px) rotate(-4deg) scale(.96) } to { opacity: 1; transform: none } }
+@keyframes fanL     { from { transform: rotate(0) } to { transform: rotate(-3.5deg) translate(-8px, 2px) } }
+@keyframes fanR     { from { transform: rotate(0) } to { transform: rotate(6deg) translate(14px, 6px) } }
+@keyframes riseIn   { from { opacity: 0; translate: 0 14px } to { opacity: 1; translate: 0 0 } }
+@keyframes typing   { 0%, 60%, 100% { transform: translateY(0); opacity: .5 } 30% { transform: translateY(-4px); opacity: 1 } }
+
+.tab-pop   { animation: tabPop .38s cubic-bezier(.3,1.6,.5,1); }
+.pop-in    { animation: popIn .16s ease-out; transform-origin: top right; }
+.screen-in { animation: screenIn .28s ease-out; }
+.deal-in   { animation: dealIn .55s cubic-bezier(.2,1.2,.4,1) both; }
+.fan-l     { animation: fanL .6s .1s cubic-bezier(.2,1.2,.4,1) both; }
+.fan-r     { animation: fanR .6s .1s cubic-bezier(.2,1.2,.4,1) both; }
+.rise-in   { animation: riseIn .4s cubic-bezier(.2,1,.4,1) both; }
+.typing-dot { animation: typing 1s infinite ease-in-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-pop, .pop-in, .screen-in, .deal-in, .rise-in, .typing-dot { animation: none; }
+  .fan-l { animation: none; transform: rotate(-3.5deg) translate(-8px, 2px); }
+  .fan-r { animation: none; transform: rotate(6deg) translate(14px, 6px); }
+}

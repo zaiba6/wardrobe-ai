@@ -142,17 +142,26 @@ function EditModal({ item, onSave, onClose }) {
 
 const FORMALITY_SHORT = { casual: 'casual', 'smart-casual': 'smart', formal: 'formal' }
 
-function PhotoCard({ photo, onEditItem, onDeleteItem, onDeletePhoto }) {
+const TILE_SHAPES = ['aspect-[4/5]', 'aspect-square', 'aspect-[3/4]', 'aspect-[5/6]']
+const TILE_TILT = [-1.2, 0.8, -0.6, 1, -0.8, 0.6]
+
+function PhotoCard({ photo, index, onEditItem, onDeleteItem, onDeletePhoto }) {
   return (
     <div
-      className="rounded-xl overflow-hidden border group"
-      style={{ backgroundColor: '#fff', borderColor: '#E3D9CE' }}
+      className="rounded-3xl overflow-hidden border group break-inside-avoid mb-3 rise-in"
+      style={{
+        backgroundColor: '#fff',
+        borderColor: '#E3D9CE',
+        boxShadow: '0 6px 14px rgba(45,26,14,0.06)',
+        transform: `rotate(${TILE_TILT[index % TILE_TILT.length]}deg)`,
+        animationDelay: `${Math.min(index, 8) * 40}ms`,
+      }}
     >
-      <div className="aspect-square overflow-hidden relative group/photo" style={{ backgroundColor: '#F0EAE2' }}>
+      <div className={`${TILE_SHAPES[index % TILE_SHAPES.length]} overflow-hidden relative group/photo`} style={{ backgroundColor: '#F0EAE2' }}>
         <img src={`${API}${photo.image_url}`} alt="" className="w-full h-full object-cover" />
         <button
           onClick={e => { e.stopPropagation(); onDeletePhoto(photo) }}
-          className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center opacity-0 group-hover/photo:opacity-100 transition-opacity"
+          className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center opacity-70 sm:opacity-0 group-hover/photo:opacity-100 transition-opacity"
           style={{ backgroundColor: 'rgba(250,247,242,0.9)', color: '#9B8E84' }}
           title="Remove photo"
         >
@@ -166,8 +175,8 @@ function PhotoCard({ photo, onEditItem, onDeleteItem, onDeletePhoto }) {
           <div key={item.id} className="flex items-center gap-1 group/row">
             {/* subtype/type pill */}
             <span
-              className="text-xs px-2 py-0.5 rounded-full flex-1 min-w-0 truncate capitalize"
-              style={{ backgroundColor: '#F0DADA', color: '#6B1010' }}
+              className="text-xs px-2.5 py-1 rounded-full flex-1 min-w-0 truncate capitalize"
+              style={{ backgroundColor: '#F0EAE2', color: '#2D1A0E' }}
             >
               {item.subtype || item.type}
             </span>
@@ -224,6 +233,15 @@ export default function Wardrobe() {
       map[key].items.push(item)
     })
     return Object.values(map)
+  }, [clothes])
+
+  const topColor = useMemo(() => {
+    const counts = {}
+    clothes.forEach(c => {
+      const word = (c.color || '').toLowerCase().split(/[\s/,-]+/).pop()
+      if (word) counts[word] = (counts[word] || 0) + 1
+    })
+    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '—'
   }, [clothes])
 
   const fetchClothes = async (f = filters) => {
@@ -335,15 +353,15 @@ export default function Wardrobe() {
       {/* Header */}
       <div className="flex items-end justify-between">
         <div>
-          <h2 className="serif text-2xl" style={{ color: '#2D1A0E' }}>the floordrobe</h2>
-          <p className="text-sm mt-0.5" style={{ color: '#9B8E84' }}>
-            {photos.length} {photos.length === 1 ? 'photo' : 'photos'} · {clothes.length} {clothes.length === 1 ? 'piece' : 'pieces'}
-          </p>
+          <p className="text-[11px] uppercase tracking-[0.18em]" style={{ color: '#9B8E84' }}>the floordrobe</p>
+          <h2 className="serif-italic text-[34px] leading-tight mt-1" style={{ color: '#2D1A0E' }}>
+            {clothes.length} {clothes.length === 1 ? 'piece' : 'pieces'}
+          </h2>
         </div>
         <button
           onClick={() => !uploading && fileInputRef.current?.click()}
           disabled={uploading}
-          className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all disabled:opacity-60"
+          className="hidden sm:flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all disabled:opacity-60"
           style={{ backgroundColor: '#2D1A0E', color: '#FAF7F2' }}
         >
           {uploading ? <Spinner /> : (
@@ -355,6 +373,22 @@ export default function Wardrobe() {
         </button>
         <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={e => { handleUpload(e.target.files); e.target.value = '' }} />
       </div>
+
+      {/* Quick stats */}
+      {clothes.length > 0 && (
+        <div className="flex gap-2 -mt-4">
+          {[
+            [clothes.length, clothes.length === 1 ? 'piece' : 'pieces'],
+            [photos.length, photos.length === 1 ? 'photo' : 'photos'],
+            [topColor, 'your top color'],
+          ].map(([value, label]) => (
+            <div key={label} className="flex-1 min-w-0 rounded-2xl border px-3 py-2.5" style={{ backgroundColor: '#fff', borderColor: '#E3D9CE' }}>
+              <p className="serif text-xl truncate" style={{ color: '#2D1A0E' }}>{value}</p>
+              <p className="text-[11px] truncate" style={{ color: '#9B8E84' }}>{label}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Onboarding hint — shown until user has 10+ photos */}
       {photos.length < 10 && (
@@ -370,7 +404,7 @@ export default function Wardrobe() {
 
       {/* Upload drop zone */}
       <div
-        className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all duration-200 ${dragOver ? 'border-[#8B1A1A] bg-[#F0DADA]/30' : 'border-[#E3D9CE] hover:border-[#8B1A1A]/40'}`}
+        className={`${uploading ? 'block' : 'hidden sm:block'} border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all duration-200 ${dragOver ? 'border-[#8B1A1A] bg-[#F0DADA]/30' : 'border-[#E3D9CE] hover:border-[#8B1A1A]/40'}`}
         onClick={() => !uploading && fileInputRef.current?.click()}
         onDragOver={e => { e.preventDefault(); setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
@@ -390,7 +424,7 @@ export default function Wardrobe() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-5 px-5 sm:mx-0 sm:px-0 sm:flex-wrap [&>*]:shrink-0">
         <select
           value={filters.type}
           onChange={e => {
@@ -452,13 +486,14 @@ export default function Wardrobe() {
       ) : photos.length === 0 ? (
         <div className="text-center py-24 space-y-2">
           <p className="serif-italic text-2xl" style={{ color: '#C4B5AC' }}>nothing here yet</p>
-          <p className="text-sm" style={{ color: '#C4B5AC' }}>upload your first piece above</p>
+          <p className="text-sm" style={{ color: '#C4B5AC' }}>tap “add piece” to upload your first one</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {photos.map(photo => (
+        <div className="columns-2 sm:columns-3 lg:columns-4 gap-3">
+          {photos.map((photo, i) => (
             <PhotoCard
               key={photo.image_url}
+              index={i}
               photo={photo}
               onEditItem={setEditingItem}
               onDeleteItem={handleDelete}
@@ -467,6 +502,20 @@ export default function Wardrobe() {
           ))}
         </div>
       )}
+
+      <button
+        onClick={() => !uploading && fileInputRef.current?.click()}
+        disabled={uploading}
+        className="sm:hidden fixed right-5 z-40 h-12 pl-4 pr-5 rounded-full flex items-center gap-2 text-sm transition-transform active:scale-95 disabled:opacity-70"
+        style={{ bottom: 'calc(var(--tabbar-space) + 4px)', backgroundColor: '#2D1A0E', color: '#fff', boxShadow: '0 12px 24px rgba(45,26,14,0.3)' }}
+      >
+        {uploading ? <Spinner /> : (
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.4}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+          </svg>
+        )}
+        {uploading ? 'analyzing…' : 'add piece'}
+      </button>
 
       {editingItem && (
         <EditModal

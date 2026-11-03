@@ -4,13 +4,25 @@
     {
       "name": "backend",
       "runtimeExecutable": "bash",
-      "runtimeArgs": ["-c", "cd backend && venv/bin/python -m uvicorn main:app --port 8000"],
+      "runtimeArgs": [
+        "-c",
+        "cd backend && venv/bin/python -m uvicorn main:app --port 8000"
+      ],
       "port": 8000
     },
     {
       "name": "frontend",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "frontend", "run", "dev", "--", "--port", "5173", "--strictPort"],
+      "runtimeArgs": [
+        "--prefix",
+        "frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5173",
+        "--strictPort"
+      ],
       "port": 5173
     }
   ]

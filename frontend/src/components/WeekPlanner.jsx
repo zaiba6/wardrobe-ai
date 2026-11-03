@@ -383,7 +383,10 @@ export default function WeekPlanner() {
     <div className="space-y-6 max-w-2xl">
       {/* Header */}
       <div>
-        <h2 className="serif-italic text-3xl leading-snug" style={{ color: '#2D1A0E' }}>week planner</h2>
+        <p className="text-[11px] uppercase tracking-[0.18em]" style={{ color: '#9B8E84' }}>
+          week of {new Date(weekDates[0] + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+        </p>
+        <h2 className="serif-italic text-[34px] leading-tight mt-1" style={{ color: '#2D1A0E' }}>week planner</h2>
         <p className="text-sm mt-1" style={{ color: '#9B8E84' }}>
           {weather
             ? `${weatherEmoji(weather.description)} ${weather.city} · ${Math.round(weather.temp_fahrenheit)}°F this week`

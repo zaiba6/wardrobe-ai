@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import axios from 'axios'
-import ClothesLoader from './ClothesLoader'
 
 const API = import.meta.env.VITE_API_URL ?? ''
 
@@ -153,22 +152,25 @@ export default function StylistChat() {
       ref={rootRef}
       className="flex flex-col"
       style={empty && fitTop != null
-        ? { height: `calc(100dvh - ${fitTop}px - env(safe-area-inset-bottom) - 0.75rem)` }
+        ? { height: `calc(100dvh - ${fitTop}px - var(--tabbar-space))` }
         : { minHeight: 'calc(100dvh - 11rem)' }}
     >
-      <div className="flex items-start justify-between gap-4 mb-6">
+      <div className="flex items-start justify-between gap-4 mb-5">
         <div>
-          <h2 className="serif-italic text-2xl leading-none" style={{ color: '#2D1A0E' }}>
-            ask the closet
+          <p className="text-[11px] uppercase tracking-[0.18em]" style={{ color: '#9B8E84' }}>ask the closet</p>
+          <h2 className="serif-italic text-[34px] leading-tight mt-1" style={{ color: '#2D1A0E' }}>
+            your stylist
           </h2>
-          <p className="text-xs mt-2 tracking-wide" style={{ color: '#9B8E84' }}>
-            packing lists, tonight’s outfit — pulled from what you own
-          </p>
         </div>
-        {messages.length > 0 && (
+        {messages.length === 0 ? (
+          <span className="mt-2 flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full shrink-0" style={{ backgroundColor: '#EAF2EA', color: '#5E7F5E' }}>
+            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#5E9E5E', boxShadow: '0 0 0 3px rgba(94,158,94,0.2)' }} />
+            online
+          </span>
+        ) : (
           <button
             onClick={reset}
-            className="text-[10px] rounded-full px-3 py-1.5 border shrink-0 transition-all hover:bg-[#F0EAE2]"
+            className="mt-2 text-xs rounded-full px-3 py-1.5 border shrink-0 transition-all hover:bg-[#F0EAE2]"
             style={{ borderColor: '#E3D9CE', color: '#9B8E84' }}
           >
             new chat
@@ -186,7 +188,7 @@ export default function StylistChat() {
               <button
                 key={s.label}
                 onClick={() => send(s.text)}
-                className="text-xs rounded-full px-4 py-2 border transition-all hover:bg-[#F0DADA] hover:border-[#8B1A1A]"
+                className="text-[13px] rounded-full px-4 py-2 border transition-all active:scale-95 hover:bg-[#F0DADA] hover:border-[#8B1A1A]"
                 style={{ borderColor: '#E3D9CE', color: '#2D1A0E', backgroundColor: '#fff' }}
               >
                 {s.label}
@@ -199,15 +201,17 @@ export default function StylistChat() {
       {!empty && (
         <div className="flex-1 space-y-5 pb-4">
           {messages.map((m, i) => (
-            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div key={i} className={`flex rise-in ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div
-                className={`max-w-[92%] sm:max-w-[80%] ${
-                  m.role === 'user' ? 'rounded-2xl rounded-br-md px-4 py-3' : 'space-y-1'
+                className={`max-w-[86%] sm:max-w-[80%] ${
+                  m.role === 'user'
+                    ? 'rounded-3xl rounded-br-md px-4 py-3'
+                    : 'rounded-3xl rounded-bl-md border px-4 py-3 space-y-2'
                 }`}
                 style={
                   m.role === 'user'
-                    ? { backgroundColor: '#2D1A0E', color: '#FAF7F2' }
-                    : undefined
+                    ? { backgroundColor: '#8B1A1A', color: '#fff' }
+                    : { backgroundColor: '#fff', borderColor: '#E3D9CE' }
                 }
               >
                 {m.role === 'user' ? (
@@ -230,7 +234,7 @@ export default function StylistChat() {
                           <button
                             key={chip}
                             onClick={() => send(chip)}
-                            className="text-[11px] rounded-full px-3 py-1.5 border transition-all hover:bg-[#F0DADA] hover:border-[#8B1A1A]"
+                            className="text-xs rounded-full px-3 py-1.5 border transition-all active:scale-95 hover:bg-[#F0DADA] hover:border-[#8B1A1A]"
                             style={{ borderColor: '#E3D9CE', color: '#4A3020', backgroundColor: '#fff' }}
                           >
                             {chip}
@@ -245,8 +249,12 @@ export default function StylistChat() {
           ))}
 
           {sending && (
-            <div className="flex items-center gap-3 py-2">
-              <ClothesLoader />
+            <div className="flex items-center gap-3">
+              <div className="flex gap-1.5 px-4 py-3.5 rounded-3xl rounded-bl-md border" style={{ backgroundColor: '#fff', borderColor: '#E3D9CE' }}>
+                {[0, 1, 2].map(d => (
+                  <span key={d} className="typing-dot w-2 h-2 rounded-full" style={{ backgroundColor: '#B3A69C', animationDelay: `${d * 0.15}s` }} />
+                ))}
+              </div>
               <p className="text-xs" style={{ color: '#9B8E84' }}>looking through your closet…</p>
             </div>
           )}
@@ -263,12 +271,12 @@ export default function StylistChat() {
           e.preventDefault()
           send()
         }}
-        className="sticky bottom-0 pt-3 pb-1 -mx-1 px-1"
-        style={{ background: 'linear-gradient(180deg, rgba(250,247,242,0) 0%, #FAF7F2 28%)' }}
+        className="sticky pt-3 pb-1 -mx-1 px-1"
+        style={{ bottom: empty ? 0 : 'var(--tabbar-space)', background: 'linear-gradient(180deg, rgba(250,247,242,0) 0%, #FAF7F2 28%)' }}
       >
         <div
-          className="flex items-end gap-2 rounded-2xl border px-3 py-2"
-          style={{ backgroundColor: '#fff', borderColor: '#E3D9CE' }}
+          className="flex items-end gap-2 rounded-[26px] border pl-4 pr-1.5 py-1.5"
+          style={{ backgroundColor: '#fff', borderColor: '#E3D9CE', boxShadow: '0 6px 16px rgba(45,26,14,0.06)' }}
         >
           <textarea
             ref={inputRef}
@@ -281,18 +289,19 @@ export default function StylistChat() {
                 send()
               }
             }}
-            placeholder="e.g. 5 days in toronto, suitcase max 12 pieces…"
-            className="flex-1 resize-none bg-transparent text-sm py-2 px-1 outline-none max-h-32"
+            placeholder="ask anything about your closet…"
+            className="flex-1 resize-none bg-transparent text-[15px] py-2 outline-none max-h-32"
             style={{ color: '#2D1A0E' }}
             disabled={sending}
           />
           <button
             type="submit"
             disabled={sending || !input.trim()}
-            className="rounded-full px-4 py-2 text-xs font-medium shrink-0 transition-all disabled:opacity-40"
-            style={{ backgroundColor: '#8B1A1A', color: '#FAF7F2' }}
+            aria-label="send"
+            className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-transform active:scale-90 disabled:opacity-40"
+            style={{ backgroundColor: '#8B1A1A', color: '#fff' }}
           >
-            send
+            <svg width="17" height="17" viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-2-6z" fill="currentColor" /></svg>
           </button>
         </div>
       </form>

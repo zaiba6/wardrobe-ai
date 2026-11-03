@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import ClothesLoader from './ClothesLoader'
+import { useAuth } from '../context/AuthContext'
 
 const API = import.meta.env.VITE_API_URL ?? ''
 
@@ -50,32 +51,31 @@ function weatherEmoji(condition) {
 
 function WeatherStrip({ weather }) {
   return (
-    <div className="flex items-center gap-4 rounded-2xl px-5 py-4 border" style={{ backgroundColor: '#fff', borderColor: '#E3D9CE' }}>
-      <span className="text-2xl">{weatherEmoji(weather.condition)}</span>
-      <div className="flex-1">
-        <p className="text-sm font-medium" style={{ color: '#2D1A0E' }}>{weather.city}</p>
-        <p className="text-xs capitalize" style={{ color: '#9B8E84' }}>{weather.description}</p>
-      </div>
-      <div className="text-right">
-        <p className="text-lg font-medium" style={{ color: '#2D1A0E' }}>{Math.round(weather.temp_fahrenheit)}°F</p>
-        <p className="text-xs" style={{ color: '#9B8E84' }}>{Math.round(weather.temp_celsius)}°C</p>
+    <div className="relative overflow-hidden flex items-center gap-4 rounded-3xl px-5 py-4 rise-in" style={{ background: 'linear-gradient(120deg, #FFF6EA, #F6E3D3)' }}>
+      <div className="absolute -right-5 -top-5 w-24 h-24 rounded-full" style={{ background: 'radial-gradient(circle, #FFD9A0 0%, rgba(255,217,160,0) 70%)' }} />
+      <p className="serif text-[40px] leading-none" style={{ color: '#2D1A0E' }}>
+        {Math.round(weather.temp_fahrenheit)}°
+      </p>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium truncate" style={{ color: '#2D1A0E' }}>{weatherEmoji(weather.condition)} {weather.city}</p>
+        <p className="text-xs capitalize" style={{ color: '#9B8E84' }}>{weather.description} · {Math.round(weather.temp_celsius)}°C</p>
       </div>
     </div>
   )
 }
 
-function OutfitItemTile({ item }) {
+const TILT = ['-2deg', '1.5deg', '-1deg', '2deg', '-1.5deg', '1deg']
+
+function OutfitItemTile({ item, index, tall }) {
   return (
-    <div className="flex flex-col items-center gap-1.5 w-20">
-      <div className="w-20 h-20 rounded-xl overflow-hidden" style={{ backgroundColor: '#F0EAE2' }}>
-        <img src={`${API}${item.image_url}`} alt={item.type} className="w-full h-full object-cover" />
-      </div>
-      <p className="text-xs text-center capitalize leading-tight" style={{ color: '#4A3020' }}>
+    <div
+      className={`relative rounded-2xl overflow-hidden ${tall ? 'row-span-2' : 'aspect-square'}`}
+      style={{ backgroundColor: '#F0EAE2', transform: `rotate(${TILT[index % TILT.length]})` }}
+    >
+      <img src={`${API}${item.image_url}`} alt={item.type} className="w-full h-full object-cover" />
+      <span className="absolute left-1.5 bottom-1.5 max-w-[calc(100%-12px)] truncate text-[10.5px] capitalize px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.88)', color: '#2D1A0E' }}>
         {item.subtype || item.type}
-      </p>
-      {item.color && (
-        <p className="text-[10px] text-center capitalize leading-tight" style={{ color: '#9B8E84' }}>{item.color}</p>
-      )}
+      </span>
     </div>
   )
 }
@@ -108,47 +108,62 @@ function OutfitCard({ outfit, mood, occasion, weather, onRefresh, onBadRec, refr
     onBadRec(reason)
   }
 
+  const items = outfit.items
   return (
-    <div className="rounded-2xl border p-5 space-y-4" style={{ backgroundColor: '#fff', borderColor: '#E3D9CE' }}>
-      {outfit.reason && (
-        <p className="text-xs italic" style={{ color: '#9B8E84' }}>{outfit.reason}</p>
-      )}
-      <div className="flex gap-3 flex-wrap">
-        {outfit.items.map((item, j) => (
-          <OutfitItemTile key={item.id ?? j} item={item} />
-        ))}
+    <div className="space-y-5">
+      {/* Card deck */}
+      <div className="relative mx-1">
+        <div className="absolute inset-0 rounded-[30px] border fan-r" style={{ backgroundColor: '#F0DADA', borderColor: '#E8CECE' }} />
+        <div className="absolute inset-0 rounded-[30px] border fan-l" style={{ backgroundColor: '#F6EEE6', borderColor: '#E3D9CE' }} />
+        <div key={items.map(i => i.id).join('-')} className="relative rounded-[30px] border p-4 space-y-3 deal-in" style={{ backgroundColor: '#fff', borderColor: '#E3D9CE', boxShadow: '0 18px 40px rgba(45,26,14,0.14)' }}>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] uppercase tracking-wider px-2.5 py-1 rounded-full truncate" style={{ backgroundColor: '#F0DADA', color: '#6B1010' }}>
+              today's look{occasion ? ` · ${occasion.split(',')[0]}` : ''}
+            </span>
+            <span className="text-xs shrink-0" style={{ color: '#9B8E84' }}>{items.length} pieces</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2.5">
+            {items.map((item, j) => (
+              <OutfitItemTile key={item.id ?? j} item={item} index={j} tall={j === 0 && items.length >= 3 && items.length % 2 === 1} />
+            ))}
+          </div>
+          {outfit.reason && (
+            <p className="serif-italic text-[15px] leading-snug" style={{ color: '#4A3020' }}>“{outfit.reason}”</p>
+          )}
+        </div>
       </div>
-      <div className="flex items-center gap-3 pt-1 flex-wrap">
-        <button
-          onClick={handleSave}
-          disabled={saved || saving}
-          className="text-xs rounded-full px-4 py-1.5 border transition-all disabled:opacity-60"
-          style={saved
-            ? { borderColor: '#7A9E7A', color: '#7A9E7A', backgroundColor: '#F0F7F0' }
-            : { borderColor: '#E3D9CE', color: '#9B8E84' }
-          }
-        >
-          {saved ? 'saved to outfits worn ✓' : saving ? 'saving…' : 'save this look ✦'}
-        </button>
+
+      {/* Actions */}
+      <div className="flex items-center gap-2.5">
         <button
           onClick={onRefresh}
           disabled={refreshing}
-          className="text-xs rounded-full px-4 py-1.5 border transition-all disabled:opacity-60 flex items-center gap-1.5"
-          style={{ borderColor: '#E3D9CE', color: '#9B8E84' }}
+          className="flex-1 h-12 rounded-full border flex items-center justify-center gap-2 text-sm font-medium transition-transform active:scale-95 disabled:opacity-60"
+          style={{ backgroundColor: '#fff', borderColor: '#E3D9CE', color: '#2D1A0E' }}
         >
-          {refreshing && <span className="w-2.5 h-2.5 rounded-full border border-[#E3D9CE] border-t-[#8B1A1A] animate-spin inline-block" />}
-          {refreshing ? 'finding another…' : 'try another →'}
+          {refreshing
+            ? <span className="w-3.5 h-3.5 rounded-full border-2 border-[#E3D9CE] border-t-[#8B1A1A] animate-spin inline-block" />
+            : <svg width="17" height="17" viewBox="0 0 24 24"><path d="M3 7h4l10 10h4M3 17h4l3-3M14 10l3-3h4M18 4l3 3-3 3M18 14l3 3-3 3" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+          {refreshing ? 'shuffling…' : 'shuffle'}
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={saved || saving}
+          className="flex-[1.4] h-12 rounded-full text-sm font-medium transition-transform active:scale-95"
+          style={saved
+            ? { backgroundColor: '#F0F7F0', color: '#4E6E4E', border: '1px solid #C9DCC9' }
+            : { backgroundColor: '#8B1A1A', color: '#fff', boxShadow: '0 10px 20px rgba(139,26,26,0.28)' }}
+        >
+          {saved ? 'logged ✓' : saving ? 'saving…' : 'wearing this ✓'}
         </button>
         <button
           onClick={() => setShowFeedback(p => !p)}
           disabled={refreshing}
-          className="text-xs rounded-full px-4 py-1.5 border transition-all disabled:opacity-60"
-          style={showFeedback
-            ? { borderColor: '#8B1A1A', color: '#8B1A1A', backgroundColor: '#F0DADA' }
-            : { borderColor: '#E8CECE', color: '#8B1A1A', backgroundColor: '#FDF5F5' }
-          }
+          aria-label="bad recommendation"
+          className="w-12 h-12 rounded-full flex items-center justify-center text-base shrink-0 transition-transform active:scale-90 disabled:opacity-60"
+          style={{ backgroundColor: showFeedback ? '#E8CECE' : '#F0DADA' }}
         >
-          👎 bad rec
+          👎
         </button>
       </div>
 
@@ -186,7 +201,14 @@ function OutfitCard({ outfit, mood, occasion, weather, onRefresh, onBadRec, refr
   )
 }
 
+function greeting() {
+  const h = new Date().getHours()
+  return h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening'
+}
+
 export default function GetDressed() {
+  const { user } = useAuth()
+  const firstName = (user?.name || '').split(' ')[0].toLowerCase()
   const [occasion, setOccasion]   = useState('')
   const [moodKey, setMoodKey]     = useState(null)
   const [moodText, setMoodText]   = useState('')
@@ -311,13 +333,16 @@ export default function GetDressed() {
   ]
 
   return (
-    <div className="space-y-10 max-w-2xl">
+    <div className="space-y-8 max-w-2xl">
       <div>
-        <h2 className="serif-italic text-3xl leading-snug" style={{ color: '#2D1A0E' }}>
-          so, what are we wearing?
+        <p className="text-[11px] uppercase tracking-[0.18em]" style={{ color: '#9B8E84' }}>
+          {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+        </p>
+        <h2 className="serif-italic text-[34px] leading-tight mt-1" style={{ color: '#2D1A0E' }}>
+          {greeting()}{firstName ? `, ${firstName}` : ''}
         </h2>
         <p className="text-sm mt-1" style={{ color: '#9B8E84' }}>
-          tell me the plan, the vibe, and where you are
+          tell me the plan and the vibe — i'll pull the look
         </p>
       </div>
 
@@ -326,14 +351,14 @@ export default function GetDressed() {
         <p className="text-xs uppercase tracking-widest" style={{ color: '#9B8E84' }}>
           occasion <span style={{ color: '#C4B5AC', textTransform: 'none', letterSpacing: 'normal' }}>— optional</span>
         </p>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-5 px-5 sm:mx-0 sm:px-0 sm:flex-wrap">
           {allPresets.map((p, i) => (
-            <div key={p.id ?? p.label} className="relative group/chip">
+            <div key={p.id ?? p.label} className="relative group/chip shrink-0">
               <button
                 onClick={() => setOccasion(occasion === p.value ? '' : p.value)}
-                className="text-xs rounded-full px-3 py-1.5 border transition-all"
+                className="text-[13px] rounded-full px-3.5 py-2 border transition-all active:scale-95"
                 style={occasion === p.value
-                  ? { backgroundColor: '#F0DADA', borderColor: '#8B1A1A', color: '#6B1010' }
+                  ? { backgroundColor: '#2D1A0E', borderColor: '#2D1A0E', color: '#FAF7F2' }
                   : { backgroundColor: '#fff', borderColor: p.saved ? '#D4C5C5' : '#E3D9CE', color: p.saved ? '#6B4040' : '#9B8E84' }
                 }
               >
@@ -407,12 +432,12 @@ export default function GetDressed() {
       {/* 2 — Mood */}
       <div className="space-y-3">
         <p className="text-xs uppercase tracking-widest" style={{ color: '#9B8E84' }}>how are you feeling today</p>
-        <div className="flex gap-3 flex-wrap">
+        <div className="flex gap-2.5 overflow-x-auto no-scrollbar -mx-5 px-5 pb-1 sm:mx-0 sm:px-0 sm:flex-wrap">
           {MOODS.map(m => (
             <button
               key={m.key}
               onClick={() => { setMoodKey(moodKey === m.key ? null : m.key); setMoodText('') }}
-              className="flex flex-col items-center gap-1.5 rounded-2xl border px-4 py-3.5 w-[5.5rem] transition-all duration-200 text-center"
+              className="flex flex-col items-center gap-1.5 rounded-2xl border px-4 py-3.5 w-[5.5rem] shrink-0 transition-all duration-200 text-center active:scale-95"
               style={moodKey === m.key && !moodText
                 ? { backgroundColor: '#F0DADA', borderColor: '#8B1A1A', color: '#6B1010' }
                 : { backgroundColor: '#fff', borderColor: '#E3D9CE', color: '#9B8E84' }
@@ -482,11 +507,11 @@ export default function GetDressed() {
       <button
         onClick={handleSubmit}
         disabled={!canSubmit}
-        className="flex items-center gap-2 rounded-full px-7 py-3 text-sm font-medium transition-all disabled:opacity-40"
+        className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-full px-7 h-12 text-sm font-medium transition-all active:scale-[0.98] disabled:opacity-40"
         style={{ backgroundColor: '#2D1A0E', color: '#FAF7F2' }}
       >
         {loading && <div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />}
-        {loading ? 'finding your look…' : 'dress me →'}
+        {loading ? 'finding your look…' : 'dress me ✦'}
       </button>
 
       {loading && (
