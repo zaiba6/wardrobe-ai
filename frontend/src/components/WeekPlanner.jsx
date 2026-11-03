@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import axios from 'axios'
 import ClothesLoader from './ClothesLoader'
+import CalendarConnect from './CalendarConnect'
 
 const API = import.meta.env.VITE_API_URL ?? ''
 
@@ -17,6 +18,10 @@ function weatherEmoji(condition = '') {
   return '🌤️'
 }
 
+function ymd(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 function getWeekDates() {
   const today = new Date()
   const dow = today.getDay()
@@ -25,8 +30,14 @@ function getWeekDates() {
   return DAYS.map((_, i) => {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
-    return d.toISOString().slice(0, 10)
+    return ymd(d)
   })
+}
+
+// Calendar event → the tag we plan an outfit around, e.g. "dinner w/ sam (7pm)"
+function eventTag(ev) {
+  const title = ev.title.trim().toLowerCase()
+  return ev.time ? `${title} (${ev.time})` : title
 }
 
 function outfitLine(items) {
@@ -105,12 +116,11 @@ function DayModal({ dayData, date, onClose }) {
   )
 }
 
-function DayCard({ day, date, tags, onAddTag, onRemoveTag, outfitData, generated, onFocus, combined, onToggleCombined, onClickGenerated }) {
+function DayCard({ day, date, tags, calendarTags, onAddTag, onRemoveTag, outfitData, generated, onFocus, combined, onToggleCombined, onClickGenerated }) {
   const [inputVal, setInputVal] = useState('')
   const outfits  = outfitData?.outfits ?? []
   const hasOutfit = outfits.length > 0
-  const today    = new Date().toISOString().slice(0, 10)
-  const isToday  = date === today
+  const isToday  = date === ymd(new Date())
   const dateObj  = new Date(date + 'T12:00:00')
   const dateLabel = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
@@ -123,70 +133,86 @@ function DayCard({ day, date, tags, onAddTag, onRemoveTag, outfitData, generated
 
   return (
     <div
-      className={`rounded-xl border flex flex-col overflow-hidden ${generated && hasOutfit ? 'cursor-pointer hover:shadow-sm transition-shadow' : ''}`}
+      className={`rounded-2xl sm:rounded-xl border flex flex-row sm:flex-col overflow-hidden ${generated && hasOutfit ? 'cursor-pointer hover:shadow-sm transition-shadow' : ''}`}
       style={{
         backgroundColor: '#fff',
         borderColor: isToday ? '#C4A8A8' : hasOutfit ? '#D4C5C5' : '#E3D9CE',
-        minHeight: '120px',
       }}
       onClick={generated && hasOutfit ? onClickGenerated : undefined}
     >
-      {/* Day header */}
+      {/* Day header — a date column on phones, a strip on top in the grid */}
       <div
-        className="px-2 pt-2 pb-1 border-b shrink-0"
+        className="w-16 sm:w-auto shrink-0 flex flex-col items-center justify-center sm:items-start px-2 py-3 sm:pt-2 sm:pb-1 border-r sm:border-r-0 sm:border-b"
         style={{
           borderColor: isToday ? '#C4A8A8' : '#E3D9CE',
           backgroundColor: isToday ? '#F5E8E8' : 'transparent',
         }}
       >
-        <p className="text-[11px] font-semibold" style={{ color: '#2D1A0E' }}>{DAY_SHORT[day]}</p>
-        <p className="text-[9px]" style={{ color: '#C4B5AC' }}>{dateLabel}</p>
+        <p className="text-xs sm:text-[11px] font-semibold uppercase sm:normal-case tracking-wider sm:tracking-normal" style={{ color: isToday ? '#8B1A1A' : '#2D1A0E' }}>{DAY_SHORT[day]}</p>
+        <p className="serif text-2xl sm:hidden leading-tight" style={{ color: '#2D1A0E' }}>{dateObj.getDate()}</p>
+        <p className="hidden sm:block text-[9px]" style={{ color: '#C4B5AC' }}>{dateLabel}</p>
       </div>
 
       {/* Body */}
-      <div className="p-2 flex-1 space-y-1.5">
+      <div className="p-3 sm:p-2 flex-1 min-w-0 space-y-2 sm:space-y-1.5 sm:min-h-[90px]">
         {generated ? (
           hasOutfit ? (
             <>
               {outfits.map((outfit, i) => (
                 <div
                   key={i}
-                  className={i > 0 ? 'pt-1.5 mt-1.5 border-t' : ''}
+                  className={i > 0 ? 'pt-2 mt-2 sm:pt-1.5 sm:mt-1.5 border-t' : ''}
                   style={{ borderColor: '#E3D9CE' }}
                 >
                   {outfits.length > 1 && (
-                    <p className="text-[9px] uppercase tracking-wider mb-0.5" style={{ color: '#C4B5AC' }}>
+                    <p className="text-[10px] sm:text-[9px] uppercase tracking-wider mb-1 sm:mb-0.5" style={{ color: '#C4B5AC' }}>
                       {outfit.occasion}
                     </p>
                   )}
-                  <p className="text-[11px] leading-relaxed" style={{ color: '#4A3020' }}>
+                  {/* Thumbnails on phones */}
+                  <div className="flex gap-1.5 mb-1.5 sm:hidden">
+                    {outfit.items.slice(0, 5).map((item, j) => (
+                      <div key={item.id ?? j} className="w-11 h-11 rounded-lg overflow-hidden shrink-0" style={{ backgroundColor: '#F0EAE2' }}>
+                        <img src={`${API}${item.image_url}`} alt={item.type} className="w-full h-full object-cover" />
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-sm sm:text-[11px] leading-snug sm:leading-relaxed capitalize sm:normal-case" style={{ color: '#4A3020' }}>
                     {outfitLine(outfit.items)}
                   </p>
                 </div>
               ))}
-              <p className="text-[9px]" style={{ color: '#C4B5AC' }}>tap to see →</p>
+              <p className="text-[11px] sm:text-[9px]" style={{ color: '#C4B5AC' }}>tap to see →</p>
             </>
           ) : (
-            <p className="text-[10px]" style={{ color: '#C4B5AC' }}>rest day</p>
+            <p className="text-sm sm:text-[10px] py-1" style={{ color: '#C4B5AC' }}>rest day</p>
           )
         ) : (
           <>
             {tags.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {tags.map(tag => (
-                  <span
-                    key={tag}
-                    className="flex items-center gap-0.5 text-[10px] rounded-full px-1.5 py-0.5 border"
-                    style={{ borderColor: '#8B1A1A', backgroundColor: '#F0DADA', color: '#6B1010' }}
-                  >
-                    {tag}
-                    <button
-                      onClick={e => { e.stopPropagation(); onRemoveTag(tag) }}
-                      className="leading-none"
-                      style={{ color: '#9B6060' }}
-                    >×</button>
-                  </span>
-                ))}
+              <div className="flex flex-wrap gap-1.5 sm:gap-1">
+                {tags.map(tag => {
+                  const fromCal = calendarTags.includes(tag)
+                  return (
+                    <span
+                      key={tag}
+                      className="flex items-center gap-1 sm:gap-0.5 text-xs sm:text-[10px] rounded-full px-2.5 sm:px-1.5 py-1 sm:py-0.5 border max-w-full"
+                      style={fromCal
+                        ? { borderColor: '#E3D9CE', backgroundColor: '#F0EAE2', color: '#4A3020' }
+                        : { borderColor: '#8B1A1A', backgroundColor: '#F0DADA', color: '#6B1010' }}
+                      title={fromCal ? 'from your calendar' : undefined}
+                    >
+                      {fromCal && <span aria-hidden>📅</span>}
+                      <span className="truncate">{tag}</span>
+                      <button
+                        onClick={e => { e.stopPropagation(); onRemoveTag(tag) }}
+                        className="leading-none text-sm sm:text-xs shrink-0"
+                        style={{ color: '#9B6060' }}
+                        aria-label={`remove ${tag}`}
+                      >×</button>
+                    </span>
+                  )
+                })}
               </div>
             )}
             <input
@@ -198,15 +224,15 @@ function DayCard({ day, date, tags, onAddTag, onRemoveTag, outfitData, generated
                 if (e.key === ',') { e.preventDefault(); commit() }
               }}
               onBlur={commit}
-              placeholder={tags.length === 0 ? 'add event…' : '+'}
-              className="w-full text-[11px] bg-transparent border-b focus:outline-none pb-0.5"
+              placeholder={tags.length === 0 ? 'add event…' : '+ add another'}
+              className="w-full text-sm sm:text-[11px] bg-transparent border-b focus:outline-none pb-1 sm:pb-0.5"
               style={{ borderColor: inputVal ? '#8B1A1A' : '#E3D9CE', color: '#2D1A0E' }}
             />
             {/* Combined toggle — only shown when 2+ events */}
             {tags.length > 1 && (
               <button
                 onClick={e => { e.stopPropagation(); onToggleCombined() }}
-                className="text-[9px] rounded-full px-1.5 py-0.5 border transition-all"
+                className="text-[11px] sm:text-[9px] rounded-full px-2.5 sm:px-1.5 py-1 sm:py-0.5 border transition-all"
                 style={{
                   borderColor: combined ? '#8B1A1A' : '#E3D9CE',
                   backgroundColor: combined ? '#F0DADA' : 'transparent',
@@ -238,6 +264,46 @@ export default function WeekPlanner() {
   const [generated, setGenerated]   = useState(false)
   const [focusedDay, setFocusedDay] = useState(null)
   const [modalDay, setModalDay]     = useState(null)   // day name for detail modal
+  const [calStatus, setCalStatus]   = useState(null)   // { connected, source }
+  const [calendarTags, setCalendarTags] = useState({}) // day → tags imported from the calendar
+  const [syncing, setSyncing]       = useState(false)
+
+  // Pull this week's events and swap them in for previously imported ones (manual tags stay)
+  const syncCalendar = async () => {
+    setSyncing(true)
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+      const res = await axios.get(`${API}/api/calendar/events`, { params: { start: weekDates[0], days: 7, tz } })
+      const next = Object.fromEntries(DAYS.map((day, i) => [day, (res.data.days[weekDates[i]] ?? []).map(eventTag)]))
+      setDayTags(prev => Object.fromEntries(DAYS.map(day => {
+        const manual = prev[day].filter(t => !(calendarTags[day] ?? []).includes(t))
+        return [day, [...next[day], ...manual.filter(t => !next[day].includes(t))]]
+      })))
+      setCalendarTags(next)
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Could not sync your calendar')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  useEffect(() => {
+    axios.get(`${API}/api/calendar`)
+      .then(res => setCalStatus(res.data))
+      .catch(() => setCalStatus({ connected: false }))
+  }, [])
+
+  useEffect(() => {
+    if (calStatus?.connected) syncCalendar()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calStatus?.connected])
+
+  const disconnectCalendar = async () => {
+    await axios.delete(`${API}/api/calendar`).catch(() => {})
+    setDayTags(prev => Object.fromEntries(DAYS.map(day => [day, prev[day].filter(t => !(calendarTags[day] ?? []).includes(t))])))
+    setCalendarTags({})
+    setCalStatus({ connected: false })
+  }
 
   const addTag = (day, tag) => {
     const clean = tag.trim().toLowerCase()
@@ -300,7 +366,7 @@ export default function WeekPlanner() {
     setError('')
     setFocusedDay(null)
     setModalDay(null)
-    setDayTags(Object.fromEntries(DAYS.map(d => [d, []])))
+    setDayTags(Object.fromEntries(DAYS.map(d => [d, calendarTags[d] ?? []])))
     setDayMode(Object.fromEntries(DAYS.map(d => [d, false])))
   }
 
@@ -321,10 +387,23 @@ export default function WeekPlanner() {
         <p className="text-sm mt-1" style={{ color: '#9B8E84' }}>
           {weather
             ? `${weatherEmoji(weather.description)} ${weather.city} · ${Math.round(weather.temp_fahrenheit)}°F this week`
-            : "tap a day, add your events — i'll plan each look"
+            : calStatus?.connected
+              ? "your events are in — tweak anything, then plan your week"
+              : "tap a day, add your events — i'll plan each look"
           }
         </p>
       </div>
+
+      {/* Calendar import — hidden after generation */}
+      {!generated && calStatus && (
+        <CalendarConnect
+          status={calStatus}
+          syncing={syncing}
+          onConnected={setCalStatus}
+          onDisconnect={disconnectCalendar}
+          onRefresh={syncCalendar}
+        />
+      )}
 
       {/* Location — compact, hidden after generation */}
       {!generated && (
@@ -361,14 +440,15 @@ export default function WeekPlanner() {
         </div>
       )}
 
-      {/* Calendar grid */}
-      <div className="grid grid-cols-7 gap-1.5">
+      {/* Calendar — stacked rows on phones, 7 columns on wider screens */}
+      <div className="flex flex-col gap-2 sm:grid sm:grid-cols-7 sm:gap-1.5">
         {DAYS.map((day, i) => (
           <DayCard
             key={day}
             day={day}
             date={weekDates[i]}
             tags={dayTags[day]}
+            calendarTags={calendarTags[day] ?? []}
             onAddTag={tag => addTag(day, tag)}
             onRemoveTag={tag => removeTag(day, tag)}
             outfitData={getOutfitData(day)}

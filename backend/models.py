@@ -88,6 +88,7 @@ class UserSettings(Base):
     user_id        = Column(Integer, nullable=False, unique=True, index=True)
     style_vibes    = Column(Text, nullable=True)      # JSON array of aesthetic tags
     disabled_rules = Column(Text, nullable=True)      # JSON array of disabled rule keys
+    calendar_url   = Column(Text, nullable=True)      # private iCal (.ics) subscription link
     updated_at     = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 

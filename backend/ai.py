@@ -2,7 +2,6 @@ import base64
 import json
 import os
 import re
-import time
 from pathlib import Path
 
 import anthropic
@@ -12,20 +11,6 @@ from fashion_rules import get_rules_for_prompt
 
 load_dotenv()
 
-# #region agent log
-_DEBUG_LOG_PATH = "/Users/zaiba/Desktop/wardrobe-ai/.cursor/debug-66e2c0.log"
-_MD_MARKERS_RE = re.compile(r"\*\*|(?:^|\n)\s*\d+\.\s|(?:^|\n)\s*-\s")
-
-
-def _debug_log(entry: dict) -> None:
-    try:
-        entry.setdefault("sessionId", "66e2c0")
-        entry.setdefault("timestamp", int(time.time() * 1000))
-        with open(_DEBUG_LOG_PATH, "a") as f:
-            f.write(json.dumps(entry) + "\n")
-    except Exception:
-        pass
-# #endregion
 
 _client = None
 
@@ -489,6 +474,72 @@ def _strip_json_fence(raw: str) -> str:
     return text
 
 
+_STYLIST_REPLY_TOOL = {
+    "name": "stylist_reply",
+    "description": "Send the stylist's reply and any outfit / packing picks to the app.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "reply":        {"type": "string", "description": "What you say to the user, plain text."},
+            "mode":         {"type": "string", "enum": ["ask", "outfit", "pack"]},
+            "follow_ups":   {"type": "array", "items": {"type": "string"}, "maxItems": 4},
+            "weather_city": {"type": ["string", "null"]},
+            "outfits": {
+                "type": "array",
+                "items": {"type": "object", "properties": {
+                    "label": {"type": "string"},
+                    "item_ids": {"type": "array", "items": {"type": "integer"}},
+                    "reason": {"type": "string"},
+                }, "required": ["label", "item_ids"]},
+            },
+            "packing_lists": {
+                "type": "array",
+                "items": {"type": "object", "properties": {
+                    "label": {"type": "string"},
+                    "item_ids": {"type": "array", "items": {"type": "integer"}},
+                    "notes": {"type": "string"},
+                }, "required": ["label", "item_ids"]},
+            },
+        },
+        "required": ["reply", "mode"],
+    },
+}
+
+
+def _parse_loose_json(text: str) -> dict | None:
+    """Best-effort: pull the outermost {...} out of text that has a preamble or code fence."""
+    text = _strip_json_fence(text or "")
+    start, end = text.find("{"), text.rfind("}")
+    if start == -1 or end <= start:
+        return None
+    try:
+        data = json.loads(text[start:end + 1])
+        return data if isinstance(data, dict) else None
+    except json.JSONDecodeError:
+        return None
+
+
+def _strip_json_artifacts(text: str) -> str:
+    """Last resort when no JSON parses: salvage a "reply" value or drop JSON-looking text."""
+    m = re.search(r'"reply"\s*:\s*"((?:[^"\\]|\\.)*)', text or "")
+    if m:
+        try:
+            return json.loads(f'"{m.group(1)}"')
+        except json.JSONDecodeError:
+            return m.group(1)
+    if "{" in (text or ""):
+        return "I blanked for a second — try that again?"
+    return (text or "").strip() or "I blanked for a second — try that again?"
+
+
+def _plain_text(text: str) -> str:
+    """The chat bubble shows plain text, so drop markdown bold/italics/headers."""
+    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
+    text = re.sub(r"(?m)^#{1,6}\s*", "", text)
+    text = re.sub(r"(?<!\w)[*_](\S.*?\S|\S)[*_](?!\w)", r"\1", text)
+    return text.strip()
+
+
 def stylist_chat(
     history: list[dict],
     wardrobe_items: list[dict],
@@ -559,16 +610,8 @@ def stylist_chat(
         f"{taste_line}"
         f"{vibe_line}"
         f"Wardrobe:\n{wardrobe_text}\n\n"
-        "Respond with ONLY valid JSON (no markdown):\n"
-        "{\n"
-        '  "reply": "string spoken to the user",\n'
-        '  "mode": "ask" | "outfit" | "pack",\n'
-        '  "follow_ups": ["short chip the user can tap", "..."],\n'
-        '  "weather_city": "City name or null",\n'
-        '  "outfits": [{"label": "Tonight", "item_ids": [1,2], "reason": "why"}],\n'
-        '  "packing_lists": [{"label": "Day 1 / Essentials", "item_ids": [1,2], "notes": "optional"}]\n'
-        "}\n"
-        "Use empty arrays when not recommending yet. follow_ups: 0–4 short phrases."
+        "Always answer by calling the stylist_reply tool. Write `reply` as plain conversational "
+        "text (no markdown, no JSON). Use empty arrays when not recommending yet. follow_ups: 0–4 short phrases."
     )
 
     # Build Claude messages: system as first user preamble is less ideal than system param;
@@ -594,51 +637,21 @@ def stylist_chat(
             "packing_lists": [],
         }
 
+    # Forcing a tool call makes the API hand back parsed JSON, so the reply can
+    # never leak raw JSON into the chat (free-text JSON broke on preambles/truncation).
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
-        max_tokens=900,
+        max_tokens=1600,
         system=system,
         messages=claude_messages,
+        tools=[_STYLIST_REPLY_TOOL],
+        tool_choice={"type": "tool", "name": _STYLIST_REPLY_TOOL["name"]},
     )
 
-    raw_text = message.content[0].text
-    raw = _strip_json_fence(raw_text)
-    # #region agent log
-    _debug_log({
-        "hypothesisId": "H2/H3", "location": "ai.py:stylist_chat:pre-parse",
-        "message": "raw claude output before json.loads",
-        "data": {
-            "starts_with_fence": raw_text.strip().startswith("```"),
-            "contains_fence_later": "```" in raw_text.strip()[3:] if len(raw_text.strip()) > 3 else False,
-            "raw_head": raw[:400],
-            "raw_len": len(raw),
-        },
-    })
-    # #endregion
-    try:
-        result = json.loads(raw)
-        # #region agent log
-        _debug_log({
-            "hypothesisId": "H2", "location": "ai.py:stylist_chat:parse-ok",
-            "message": "json parse succeeded", "data": {"keys": list(result.keys())},
-        })
-        # #endregion
-    except json.JSONDecodeError as e:
-        # #region agent log
-        _debug_log({
-            "hypothesisId": "H2/H3", "location": "ai.py:stylist_chat:parse-fail",
-            "message": "json parse FAILED — falling back to raw text as reply",
-            "data": {"error": str(e), "raw_head": raw[:600]},
-        })
-        # #endregion
-        return {
-            "reply": raw[:500] if raw else "I blanked for a second — try that again?",
-            "mode": "ask",
-            "follow_ups": [],
-            "weather_city": None,
-            "outfits": [],
-            "packing_lists": [],
-        }
+    result = next((b.input for b in message.content if b.type == "tool_use"), None)
+    if not isinstance(result, dict):
+        text_out = "".join(b.text for b in message.content if b.type == "text")
+        result = _parse_loose_json(text_out) or {"reply": _strip_json_artifacts(text_out)}
 
     valid_ids = {int(item["id"]) for item in wardrobe_items}
 
@@ -678,14 +691,7 @@ def stylist_chat(
     if weather_city is not None:
         weather_city = str(weather_city).strip() or None
 
-    reply_text = str(result.get("reply") or "Here's what I'm thinking.").strip()
-    # #region agent log
-    _debug_log({
-        "hypothesisId": "H1", "location": "ai.py:stylist_chat:reply-check",
-        "message": "checking reply for unrendered markdown",
-        "data": {"has_markdown_markers": bool(_MD_MARKERS_RE.search(reply_text)), "reply_head": reply_text[:300]},
-    })
-    # #endregion
+    reply_text = _plain_text(str(result.get("reply") or "Here's what I'm thinking."))
 
     return {
         "reply": reply_text,

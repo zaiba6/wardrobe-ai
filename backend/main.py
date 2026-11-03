@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 import requests as http_requests
 from dotenv import load_dotenv
@@ -36,6 +36,7 @@ from auth import (
     create_access_token, get_current_user_id, get_optional_user_id,
     get_or_create_user, CALENDAR_SCOPES,
 )
+from calendar_import import CalendarError, events_by_day, fetch_calendar, normalize_url
 from database import Base, engine, get_db
 from models import ClothingItem, InspoItem, OutfitLog, OutfitFeedback, User, UserPreset, StyleBoard, UserSettings
 from weather import get_weather, get_weather_by_coords
@@ -62,6 +63,7 @@ _MIGRATIONS = [
     "CREATE TABLE IF NOT EXISTS user_settings (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL UNIQUE, style_vibes TEXT, disabled_rules TEXT, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)",
     "ALTER TABLE style_boards ADD COLUMN parent_id INTEGER",
     "ALTER TABLE outfit_feedback ADD COLUMN reason TEXT",
+    "ALTER TABLE user_settings ADD COLUMN calendar_url TEXT",
 ]
 with engine.connect() as _conn:
     for _stmt in _MIGRATIONS:
@@ -1450,6 +1452,77 @@ def _split_occasions(text: str) -> list[str]:
     import re
     parts = re.split(r'\s*(?:and then|and|then|,|&)\s*', text, flags=re.IGNORECASE)
     return [p.strip() for p in parts if p.strip()]
+
+
+# ---------------------------------------------------------------------------
+# Calendar import (iCal / .ics subscription link)
+# ---------------------------------------------------------------------------
+
+class CalendarConnectBody(BaseModel):
+    url: str
+
+
+def _calendar_source(url: str) -> str:
+    host = (urlparse(url).hostname or "").lower()
+    if "google" in host:
+        return "google"
+    if "icloud" in host:
+        return "icloud"
+    if "outlook" in host or "office365" in host or "live.com" in host:
+        return "outlook"
+    return "calendar"
+
+
+@app.get("/api/calendar")
+def get_calendar(user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    s = db.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+    if not s or not s.calendar_url:
+        return {"connected": False}
+    return {"connected": True, "source": _calendar_source(s.calendar_url)}
+
+
+@app.put("/api/calendar")
+def connect_calendar(body: CalendarConnectBody, user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    try:
+        url = normalize_url(body.url)
+        fetch_calendar(url)  # validate before saving
+    except CalendarError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    s = db.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+    if not s:
+        s = UserSettings(user_id=user_id)
+        db.add(s)
+    s.calendar_url = url
+    s.updated_at = datetime.utcnow()
+    db.commit()
+    return {"connected": True, "source": _calendar_source(url)}
+
+
+@app.delete("/api/calendar")
+def disconnect_calendar(user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    s = db.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+    if s and s.calendar_url:
+        s.calendar_url = None
+        db.commit()
+    return {"connected": False}
+
+
+@app.get("/api/calendar/events")
+def calendar_events(start: str, days: int = 7, tz: Optional[str] = None,
+                    user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    """Events grouped by local date for the week starting at `start` (YYYY-MM-DD)."""
+    s = db.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+    if not s or not s.calendar_url:
+        raise HTTPException(status_code=404, detail="No calendar connected.")
+    try:
+        start_date = datetime.strptime(start, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="start must be YYYY-MM-DD")
+    try:
+        cal = fetch_calendar(s.calendar_url)
+    except CalendarError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    return {"days": events_by_day(cal, start_date, max(1, min(days, 14)), tz)}
 
 
 @app.post("/api/outfit/week-plan")
